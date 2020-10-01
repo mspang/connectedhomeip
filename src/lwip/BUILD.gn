@@ -28,7 +28,7 @@ if (lwip_platform == "") {
 }
 
 assert(lwip_platform == "external" || lwip_platform == "standalone" ||
-           lwip_platform == "nrf5" || lwip_platform == "efr32",
+           lwip_platform == "nrf5" || lwip_platform == "efr32" || lwip_platform == "k32w",
        "Unsupported lwIP platform: ${lwip_platform}")
 
 if (lwip_platform != "external") {
@@ -42,6 +42,8 @@ if (lwip_platform == "nrf5") {
   import("//build_overrides/nrf5_sdk.gni")
 } else if (lwip_platform == "efr32") {
   import("//build_overrides/efr32_sdk.gni")
+} else if (lwip_platform == "k32w") {
+  import("//build_overrides/k32w_sdk.gni")
 }
 
 buildconfig_header("lwip_buildconfig") {
@@ -104,6 +106,8 @@ if (current_os == "zephyr") {
       public_deps += [ "${nrf5_sdk_build_root}:nrf5_sdk" ]
     } else if (lwip_platform == "efr32") {
       public_deps += [ "${efr32_sdk_build_root}:efr32_sdk" ]
+    } else if (lwip_platform == "k32w") {
+      public_deps += [ "${k32w_sdk_build_root}:k32w_sdk" ]
     }
 
     public_configs = [
