@@ -14,6 +14,8 @@
 # limitations under the License.
 #
 
+env
+
 if [[ ! -d ${CHIP_ROOT} ]]; then
     if [[ -n ${BASH_SOURCE[0]} ]]; then
         CHIP_ROOT=$(cd "${BASH_SOURCE[0]%/*}/.." && pwd)
