@@ -47,7 +47,8 @@
 #define CHIP_ADV_DATA_TYPE_FLAGS 0x01
 #define CHIP_ADV_DATA_FLAGS 0x06
 #define CHIP_ADV_DATA_TYPE_SERVICE_DATA 0x16
-#define CHIP_BLE_OPCODE 0x00
+#define CHIP_BLE_OPCODE_UNPROVISIONED 0x00
+#define CHIP_BLE_OPCODE_PROVISIONED 0x01
 #define CHIP_ADV_VERSION 0x00
 
 using namespace ::chip;
@@ -266,7 +267,7 @@ void BLEManagerImpl::_OnPlatformEvent(const ChipDeviceEvent * event)
     case DeviceEventType::kFabricMembershipChange:
     case DeviceEventType::kServiceProvisioningChange:
     case DeviceEventType::kAccountPairingChange:
-
+    case DeviceEventType::kWiFiConnectivityChange:
         // If CHIPOBLE_DISABLE_ADVERTISING_WHEN_PROVISIONED is enabled, and there is a change to the
         // device's provisioning state, then automatically disable CHIPoBLE advertising if the device
         // is now fully provisioned.
@@ -279,7 +280,9 @@ void BLEManagerImpl::_OnPlatformEvent(const ChipDeviceEvent * event)
 #endif // CHIP_DEVICE_CONFIG_CHIPOBLE_DISABLE_ADVERTISING_WHEN_PROVISIONED
 
         // Force the advertising configuration to be refreshed to reflect new provisioning state.
+        ChipLogProgress(DeviceLayer, "Updating advertising data");
         ClearFlag(mFlags, kFlag_AdvertisingConfigured);
+        SetFlag(mFlags, kFlag_AdvertisingRefreshNeeded);
 
         DriveBLEState();
 
@@ -659,7 +662,9 @@ CHIP_ERROR BLEManagerImpl::ConfigureAdvertisingData(void)
     advData[index++] = CHIP_ADV_DATA_TYPE_SERVICE_DATA; // AD type: (Service Data - 16-bit UUID)
     advData[index++] = ShortUUID_CHIPoBLEService[0];    // AD value
     advData[index++] = ShortUUID_CHIPoBLEService[1];    // AD value
-    advData[index++] = CHIP_BLE_OPCODE;                 // Used to differentiate from operational CHIP Ble adv
+    advData[index++] = ConnectivityMgr().IsWiFiStationProvisioned()
+        ? CHIP_BLE_OPCODE_PROVISIONED
+        : CHIP_BLE_OPCODE_UNPROVISIONED; // Used to differentiate from operational CHIP Ble adv
     advData[index++] = static_cast<uint8_t>(advDataVersionDiscriminator >> 8); // Bits[15:12] == version - Bits[11:0] Discriminator
     advData[index++] = static_cast<uint8_t>(advDataVersionDiscriminator & 0x00FF);
 
