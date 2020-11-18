@@ -155,7 +155,7 @@ void GenericThreadStackManagerImpl_FreeRTOS<ImplClass>::ThreadTaskMain(void * ar
 
     TimerHandle_t joinerTimer = xTimerCreate("JoinerTimer", pdMS_TO_TICKS(10000), pdTRUE, self, &OnJoinerTimer);
     VerifyOrDie(joinerTimer != NULL);
-    VerifyOrDie(pdPASS == xTimerStart(joinerTimer, portMAX_DELAY));
+    // VerifyOrDie(pdPASS == xTimerStart(joinerTimer, portMAX_DELAY));
 
     while (true)
     {

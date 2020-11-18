@@ -351,7 +351,8 @@ void NetworkProvisioning::ConnectivityHandler(const DeviceLayer::ChipDeviceEvent
     }
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
-    if (event->Type == DeviceLayer::DeviceEventType::kThreadStateChange && event->ThreadStateChange.AddressChanged)
+    if (event->Type == DeviceLayer::DeviceEventType::kThreadStateChange &&
+        (event->ThreadStateChange.AddressChanged || event->ThreadStateChange.RoleChanged))
     {
         Inet::IPAddress addr;
         SuccessOrExit(DeviceLayer::ThreadStackMgr().GetSlaacIPv6Address(addr));
