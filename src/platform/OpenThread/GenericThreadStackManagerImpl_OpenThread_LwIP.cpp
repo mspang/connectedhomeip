@@ -187,8 +187,7 @@ void GenericThreadStackManagerImpl_OpenThread_LwIP<ImplClass>::UpdateThreadInter
                 // Non-fabric ULAs are ignored entirely as they are presumed to not be of interest to CHIP-enabled
                 // devices, and would otherwise consume slots in the LwIP address table, potentially leading to
                 // starvation.
-                if (otAddr->mValid && !otAddr->mRloc &&
-                    (!addr.IsIPv6ULA() || IsOpenThreadMeshLocalAddress(Impl()->OTInstance(), addr)))
+                if (otAddr->mValid && !otAddr->mRloc)
                 {
                     ip_addr_t lwipAddr = addr.ToLwIPAddr();
                     s8_t addrIdx;
