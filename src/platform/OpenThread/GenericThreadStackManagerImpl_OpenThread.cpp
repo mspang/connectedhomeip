@@ -779,26 +779,16 @@ CHIP_ERROR GenericThreadStackManagerImpl_OpenThread<ImplClass>::_GetPrimary80215
 template <class ImplClass>
 CHIP_ERROR GenericThreadStackManagerImpl_OpenThread<ImplClass>::_GetSlaacIPv6Address(chip::Inet::IPAddress & addr)
 {
-    CHIP_ERROR err = CHIP_DEVICE_ERROR_CONFIG_NOT_FOUND;
-
-    Impl()->LockThreadStack();
-
-    VerifyOrExit(IsThreadAttachedNoLock(), );
-
     for (const otNetifAddress * otAddr = otIp6GetUnicastAddresses(mOTInst); otAddr != nullptr; otAddr = otAddr->mNext)
     {
-        addr = ToIPAddress(otAddr->mAddress);
-
-        if (otAddr->mValid && !otAddr->mRloc && (!addr.IsIPv6ULA() || IsOpenThreadMeshLocalAddress(mOTInst, addr)))
+        if (otAddr->mValid && otAddr->mAddressOrigin == OT_ADDRESS_ORIGIN_SLAAC)
         {
-            ExitNow(err = CHIP_NO_ERROR);
+            addr = ToIPAddress(otAddr->mAddress);
+            return CHIP_NO_ERROR;
         }
     }
 
-exit:
-    Impl()->UnlockThreadStack();
-
-    return err;
+    return CHIP_DEVICE_ERROR_CONFIG_NOT_FOUND;
 }
 
 template <class ImplClass>
