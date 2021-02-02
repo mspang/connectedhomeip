@@ -26,28 +26,29 @@
 #include <core/CHIPCore.h>
 #include <messaging/ExchangeContext.h>
 #include <messaging/ExchangeMgr.h>
-#include <protocols/CHIPProtocols.h>
+#include <messaging/Flags.h>
+#include <messaging/tests/MessagingContext.h>
+#include <protocols/Protocols.h>
 #include <support/CodeUtils.h>
 #include <transport/SecureSessionMgr.h>
-#include <transport/raw/tests/NetworkTestHelpers.h>
+#include <transport/TransportMgr.h>
 
 #include <nlbyteorder.h>
 #include <nlunit-test.h>
 
 #include <errno.h>
+#include <utility>
 
 namespace {
 
 using namespace chip;
 using namespace chip::Inet;
 using namespace chip::Transport;
+using namespace chip::Messaging;
 
-using TestContext = chip::Test::IOContext;
+using TestContext = chip::Test::MessagingContext;
 
 TestContext sContext;
-
-constexpr NodeId kSourceNodeId      = 123654;
-constexpr NodeId kDestinationNodeId = 111222333;
 
 class LoopbackTransport : public Transport::Base
 {
@@ -55,129 +56,101 @@ public:
     /// Transports are required to have a constructor that takes exactly one argument
     CHIP_ERROR Init(const char * unused) { return CHIP_NO_ERROR; }
 
-    CHIP_ERROR SendMessage(const PacketHeader & header, Header::Flags payloadFlags, const PeerAddress & address,
-                           System::PacketBuffer * msgBuf) override
+    CHIP_ERROR SendMessage(const PacketHeader & header, const PeerAddress & address, System::PacketBufferHandle msgBuf) override
     {
-        HandleMessageReceived(header, address, msgBuf);
+        HandleMessageReceived(header, address, std::move(msgBuf));
         return CHIP_NO_ERROR;
     }
 
     bool CanSendToPeer(const PeerAddress & address) override { return true; }
 };
 
-static void HanldeAllUnsolicitedMessage(ExchangeContext * ec, const PacketHeader & packetHeader, uint32_t protocolId,
-                                        uint8_t msgType, System::PacketBuffer * payload)
-{}
+TransportMgr<LoopbackTransport> gTransportMgr;
 
-static void HanldeOneUnsolicitedMessage(ExchangeContext * ec, const PacketHeader & packetHeader, uint32_t protocolId,
-                                        uint8_t msgType, System::PacketBuffer * payload)
-{}
-
-void CheckSimpleInitTest(nlTestSuite * inSuite, void * inContext)
+class MockAppDelegate : public ExchangeDelegate
 {
-    TestContext & ctx = *reinterpret_cast<TestContext *>(inContext);
+public:
+    void OnMessageReceived(ExchangeContext * ec, const PacketHeader & packetHeader, uint32_t protocolId, uint8_t msgType,
+                           System::PacketBufferHandle buffer) override
+    {
+        IsOnMessageReceivedCalled = true;
+    }
 
-    SecureSessionMgr<LoopbackTransport> conn;
-    CHIP_ERROR err;
+    void OnResponseTimeout(ExchangeContext * ec) override {}
 
-    ctx.GetInetLayer().SystemLayer()->Init(nullptr);
-
-    err = conn.Init(kSourceNodeId, ctx.GetInetLayer().SystemLayer(), "LOOPBACK");
-    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
-
-    ExchangeManager exchangeMgr;
-    err = exchangeMgr.Init(&conn);
-    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
-}
+    bool IsOnMessageReceivedCalled = false;
+};
 
 void CheckNewContextTest(nlTestSuite * inSuite, void * inContext)
 {
     TestContext & ctx = *reinterpret_cast<TestContext *>(inContext);
 
-    SecureSessionMgr<LoopbackTransport> conn;
-    CHIP_ERROR err;
-
-    ctx.GetInetLayer().SystemLayer()->Init(nullptr);
-
-    err = conn.Init(kSourceNodeId, ctx.GetInetLayer().SystemLayer(), "LOOPBACK");
-    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
-
-    ExchangeManager exchangeMgr;
-    err = exchangeMgr.Init(&conn);
-    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
-
-    ExchangeContext * ec1 = exchangeMgr.NewContext(kSourceNodeId, (void *) 0x1234);
+    MockAppDelegate mockAppDelegate;
+    ExchangeContext * ec1 = ctx.NewExchangeToLocal(&mockAppDelegate);
     NL_TEST_ASSERT(inSuite, ec1 != nullptr);
     NL_TEST_ASSERT(inSuite, ec1->IsInitiator() == true);
     NL_TEST_ASSERT(inSuite, ec1->GetExchangeId() != 0);
-    NL_TEST_ASSERT(inSuite, ec1->GetPeerNodeId() == kSourceNodeId);
-    NL_TEST_ASSERT(inSuite, ec1->GetAppState() == (void *) 0x1234);
+    auto sessionPeerToLocal = ctx.GetSecureSessionManager().GetPeerConnectionState(ec1->GetSecureSession());
+    NL_TEST_ASSERT(inSuite, sessionPeerToLocal->GetPeerNodeId() == ctx.GetSourceNodeId());
+    NL_TEST_ASSERT(inSuite, sessionPeerToLocal->GetPeerKeyID() == ctx.GetLocalKeyId());
+    NL_TEST_ASSERT(inSuite, ec1->GetDelegate() == &mockAppDelegate);
 
-    ExchangeContext * ec2 = exchangeMgr.NewContext(kDestinationNodeId, (void *) 0x2345);
+    ExchangeContext * ec2 = ctx.NewExchangeToPeer(&mockAppDelegate);
     NL_TEST_ASSERT(inSuite, ec2 != nullptr);
     NL_TEST_ASSERT(inSuite, ec2->GetExchangeId() > ec1->GetExchangeId());
-    NL_TEST_ASSERT(inSuite, ec2->GetPeerNodeId() == kDestinationNodeId);
-}
-
-void CheckFindContextTest(nlTestSuite * inSuite, void * inContext)
-{
-    TestContext & ctx = *reinterpret_cast<TestContext *>(inContext);
-
-    SecureSessionMgr<LoopbackTransport> conn;
-    CHIP_ERROR err;
-
-    ctx.GetInetLayer().SystemLayer()->Init(nullptr);
-
-    err = conn.Init(kSourceNodeId, ctx.GetInetLayer().SystemLayer(), "LOOPBACK");
-    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
-
-    ExchangeManager exchangeMgr;
-    err = exchangeMgr.Init(&conn);
-    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
-
-    ExchangeContext * ec = exchangeMgr.NewContext(kDestinationNodeId, nullptr);
-    NL_TEST_ASSERT(inSuite, ec != nullptr);
-
-    bool result = exchangeMgr.FindContext(kDestinationNodeId, nullptr, true);
-    NL_TEST_ASSERT(inSuite, result == true);
-
-    result = exchangeMgr.FindContext(kDestinationNodeId, nullptr, false);
-    NL_TEST_ASSERT(inSuite, result == false);
+    auto sessionLocalToPeer = ctx.GetSecureSessionManager().GetPeerConnectionState(ec2->GetSecureSession());
+    NL_TEST_ASSERT(inSuite, sessionLocalToPeer->GetPeerNodeId() == ctx.GetDestinationNodeId());
+    NL_TEST_ASSERT(inSuite, sessionLocalToPeer->GetPeerKeyID() == ctx.GetPeerKeyId());
 }
 
 void CheckUmhRegistrationTest(nlTestSuite * inSuite, void * inContext)
 {
     TestContext & ctx = *reinterpret_cast<TestContext *>(inContext);
 
-    SecureSessionMgr<LoopbackTransport> conn;
+    CHIP_ERROR err;
+    MockAppDelegate mockAppDelegate;
+
+    err = ctx.GetExchangeManager().RegisterUnsolicitedMessageHandler(0x0001, &mockAppDelegate);
+    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
+
+    err = ctx.GetExchangeManager().RegisterUnsolicitedMessageHandler(0x0002, 0x0001, &mockAppDelegate);
+    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
+
+    err = ctx.GetExchangeManager().UnregisterUnsolicitedMessageHandler(0x0001);
+    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
+
+    err = ctx.GetExchangeManager().UnregisterUnsolicitedMessageHandler(0x0002);
+    NL_TEST_ASSERT(inSuite, err != CHIP_NO_ERROR);
+
+    err = ctx.GetExchangeManager().UnregisterUnsolicitedMessageHandler(0x0002, 0x0001);
+    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
+
+    err = ctx.GetExchangeManager().UnregisterUnsolicitedMessageHandler(0x0002, 0x0002);
+    NL_TEST_ASSERT(inSuite, err != CHIP_NO_ERROR);
+}
+
+void CheckExchangeMessages(nlTestSuite * inSuite, void * inContext)
+{
+    TestContext & ctx = *reinterpret_cast<TestContext *>(inContext);
+
     CHIP_ERROR err;
 
-    ctx.GetInetLayer().SystemLayer()->Init(nullptr);
+    // create solicited exchange
+    MockAppDelegate mockSolicitedAppDelegate;
+    ExchangeContext * ec1 = ctx.NewExchangeToPeer(&mockSolicitedAppDelegate);
 
-    err = conn.Init(kSourceNodeId, ctx.GetInetLayer().SystemLayer(), "LOOPBACK");
+    // create unsolicited exchange
+    MockAppDelegate mockUnsolicitedAppDelegate;
+    err = ctx.GetExchangeManager().RegisterUnsolicitedMessageHandler(0x0001, 0x0001, &mockUnsolicitedAppDelegate);
     NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
 
-    ExchangeManager exchangeMgr;
-    err = exchangeMgr.Init(&conn);
-    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
+    // send a malicious packet
+    ec1->SendMessage(0x0001, 0x0002, System::PacketBuffer::New(), SendFlags(Messaging::SendMessageFlags::kNone));
+    NL_TEST_ASSERT(inSuite, !mockUnsolicitedAppDelegate.IsOnMessageReceivedCalled);
 
-    err = exchangeMgr.RegisterUnsolicitedMessageHandler(0x0001, HanldeAllUnsolicitedMessage, nullptr);
-    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
-
-    err = exchangeMgr.RegisterUnsolicitedMessageHandler(0x0002, 0x0001, HanldeOneUnsolicitedMessage, nullptr);
-    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
-
-    err = exchangeMgr.UnregisterUnsolicitedMessageHandler(0x0001);
-    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
-
-    err = exchangeMgr.UnregisterUnsolicitedMessageHandler(0x0002);
-    NL_TEST_ASSERT(inSuite, err != CHIP_NO_ERROR);
-
-    err = exchangeMgr.UnregisterUnsolicitedMessageHandler(0x0002, 0x0001);
-    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
-
-    err = exchangeMgr.UnregisterUnsolicitedMessageHandler(0x0002, 0x0002);
-    NL_TEST_ASSERT(inSuite, err != CHIP_NO_ERROR);
+    // send a good packet
+    ec1->SendMessage(0x0001, 0x0001, System::PacketBuffer::New(), SendFlags(Messaging::SendMessageFlags::kNone));
+    NL_TEST_ASSERT(inSuite, mockUnsolicitedAppDelegate.IsOnMessageReceivedCalled);
 }
 
 // Test Suite
@@ -188,10 +161,9 @@ void CheckUmhRegistrationTest(nlTestSuite * inSuite, void * inContext)
 // clang-format off
 const nlTest sTests[] =
 {
-    NL_TEST_DEF("Test ExchangeMgr::Init",                     CheckSimpleInitTest),
     NL_TEST_DEF("Test ExchangeMgr::NewContext",               CheckNewContextTest),
-    NL_TEST_DEF("Test ExchangeMgr::FindContext",              CheckFindContextTest),
     NL_TEST_DEF("Test ExchangeMgr::CheckUmhRegistrationTest", CheckUmhRegistrationTest),
+    NL_TEST_DEF("Test ExchangeMgr::CheckExchangeMessages",    CheckExchangeMessages),
 
     NL_TEST_SENTINEL()
 };
@@ -215,7 +187,11 @@ nlTestSuite sSuite =
  */
 int Initialize(void * aContext)
 {
-    CHIP_ERROR err = reinterpret_cast<TestContext *>(aContext)->Init(&sSuite);
+    CHIP_ERROR err = gTransportMgr.Init("LOOPBACK");
+    if (err != CHIP_NO_ERROR)
+        return FAILURE;
+
+    err = reinterpret_cast<TestContext *>(aContext)->Init(&sSuite, &gTransportMgr);
     return (err == CHIP_NO_ERROR) ? SUCCESS : FAILURE;
 }
 

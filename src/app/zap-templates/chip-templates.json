@@ -1,0 +1,56 @@
+{
+    "name": "CHIP Runtime templates",
+    "version": "chip-v1",
+    "helpers": [
+        "partials/helper.js",
+        "common/StringHelper.js",
+        "templates/chip/helper.js"
+    ],
+    "override": "common/override.js",
+    "partials": [
+        {
+            "name": "header",
+            "path": "partials/header.zapt"
+        },
+        {
+            "name": "clusters_header",
+            "path": "partials/clusters_header.zapt"
+        },
+        {
+            "name": "cluster_header",
+            "path": "partials/cluster_header.zapt"
+        }
+    ],
+    "templates": [
+        {
+            "path": "templates/chip/CHIPClusters.zapt",
+            "name": "C++ ZCL API Header",
+            "output": "src/controller/CHIPClusters.h"
+        },
+        {
+            "path": "templates/chip/CHIPClusters-src.zapt",
+            "name": "C++ ZCL API",
+            "output": "src/controller/CHIPClusters.cpp"
+        },
+        {
+            "path": "templates/chip/CHIPClustersObjc.zapt",
+            "name": "Objc ZCL API Header",
+            "output": "/src/darwin/Framework/CHIP/CHIPClustersObjc.h"
+        },
+        {
+            "path": "templates/chip/CHIPClustersObjc-src.zapt",
+            "name": "Objc ZCL API",
+            "output": "/src/darwin/Framework/CHIP/CHIPClustersObjc.mm"
+        },
+        {
+            "path": "templates/chip/chip-zcl-zpro-codec-api.zapt",
+            "name": "CHIP ZCL API Header",
+            "output": "src/app/chip-zcl-zpro-codec-api.h"
+        },
+        {
+            "path": "templates/chip/encoder-src.zapt",
+            "name": "CHIP ZCL API",
+            "output": "src/app/encoder.cpp"
+        }
+    ]
+}

@@ -24,9 +24,10 @@
 #pragma once
 
 #include <stdint.h>
+#include <support/BitFlags.h>
 
 namespace chip {
-namespace messaging {
+namespace Messaging {
 
 /**
  *  @brief
@@ -37,50 +38,47 @@ namespace messaging {
 enum class MessageFlagValues : uint32_t
 {
     /**< Indicates that the existing source node identifier must be reused. */
-    kChipMessageFlag_ReuseSourceId = 0x00000020,
-    /**< Indicates that the sending of the message needs to be delayed. */
-    kChipMessageFlag_DelaySend = 0x00000040,
-    /**< Indicates that the message buffer should not be freed after sending. */
-    kChipMessageFlag_RetainBuffer = 0x00000080,
+    kReuseSourceId = 0x00000020,
     /**< Indicates that the CHIP message is already encoded. */
-    kChipMessageFlag_MessageEncoded = 0x00001000,
+    kMessageEncoded = 0x00001000,
     /**< Indicates that default IPv6 source address selection should be used when sending IPv6 multicast messages. */
-    kChipMessageFlag_DefaultMulticastSourceAddress = 0x00002000,
+    kDefaultMulticastSourceAddress = 0x00002000,
     /**< Indicates that the sender of the  message requested an acknowledgment. */
-    kChipMessageFlag_PeerRequestedAck = 0x00004000,
+    kPeerRequestedAck = 0x00004000,
     /**< Indicates that the message is a duplicate of a previously received message. */
-    kChipMessageFlag_DuplicateMessage = 0x00008000,
+    kDuplicateMessage = 0x00008000,
     /**< Indicates that the peer's group key message counter is not synchronized. */
-    kChipMessageFlag_PeerGroupMsgIdNotSynchronized = 0x00010000,
+    kPeerGroupMsgIdNotSynchronized = 0x00010000,
     /**< Indicates that the source of the message is the initiator of the CHIP exchange. */
-    kChipMessageFlag_FromInitiator = 0x00020000,
+    kFromInitiator = 0x00020000,
     /**< Indicates that message is being sent/received via the local ephemeral UDP port. */
-    kChipMessageFlag_ViaEphemeralUDPPort = 0x00040000,
+    kViaEphemeralUDPPort = 0x00040000,
 };
+
+using MessageFlags = BitFlags<uint32_t, MessageFlagValues>;
 
 enum class SendMessageFlags : uint16_t
 {
+    kNone = 0x0000,
     /**< Used to indicate that automatic retransmission is enabled. */
-    kSendFlag_AutoRetrans = 0x0001,
+    kAutoRetrans = 0x0001,
     /**< Used to indicate that a response is expected within a specified timeout. */
-    kSendFlag_ExpectResponse = 0x0002,
-    /**< Used to indicate that the sending of the current message needs to be delayed. */
-    kSendFlag_DelaySend = 0x0008,
+    kExpectResponse = 0x0002,
     /**< Used to indicate that the source node ID in the message header can be reused. */
-    kSendFlag_ReuseSourceId = 0x0020,
-    /**< Used to indicate that the message buffer should not be freed after sending. */
-    kSendFlag_RetainBuffer = 0x0040,
+    kReuseSourceId = 0x0020,
     /**< Used to indicate that the message is already encoded. */
-    kSendFlag_AlreadyEncoded = 0x0080,
+    kAlreadyEncoded = 0x0080,
     /**< Used to indicate that default IPv6 source address selection should be used when sending IPv6 multicast messages. */
-    kSendFlag_DefaultMulticastSourceAddress = 0x0100,
+    kDefaultMulticastSourceAddress = 0x0100,
     /**< Used to indicate that the current message is the initiator of the exchange. */
-    kSendFlag_FromInitiator = 0x0200,
+    kFromInitiator = 0x0200,
     /**< Used to send a ReliableMessageProtocol message requesting an acknowledgment. */
-    kSendFlag_RequestAck = 0x0400,
+    kRequestAck = 0x0400,
     /**< Suppress the auto-request acknowledgment feature when sending a message. */
-    kSendFlag_NoAutoRequestAck = 0x0800,
+    kNoAutoRequestAck = 0x0800,
 };
 
-} // namespace messaging
+using SendFlags = BitFlags<uint16_t, SendMessageFlags>;
+
+} // namespace Messaging
 } // namespace chip

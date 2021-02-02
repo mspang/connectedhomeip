@@ -29,7 +29,7 @@
 
 #include "Base41.h"
 
-using namespace std;
+#include <climits>
 
 namespace chip {
 
@@ -40,9 +40,9 @@ static const int kBase41ChunkLen = 3;
 static const int kBytesChunkLen  = 2;
 static const int kRadix          = sizeof(codes) / sizeof(codes[0]);
 
-string base41Encode(const uint8_t * buf, size_t buf_len)
+std::string base41Encode(const uint8_t * buf, size_t buf_len)
 {
-    string result;
+    std::string result;
 
     // eat little-endian uint16_ts from the byte array
     // encode as 3 base41 characters
@@ -88,12 +88,13 @@ string base41Encode(const uint8_t * buf, size_t buf_len)
     // handle leftover bytes, if any
     if (buf_len != 0)
     {
-        int value = 0;
+        uint64_t value = 0;
+        static_assert(sizeof(value) * CHAR_BIT >= kBytesChunkLen * 8, "value might overflow");
 
-        for (int i = buf_len - 1; i >= 0; i--)
+        for (size_t i = buf_len; i > 0; i--)
         {
             value *= 256;
-            value += buf[i];
+            value += buf[i - 1];
         }
 
         // need to indicate there are leftover bytes, so append at least one encoding char
@@ -189,56 +190,58 @@ static inline CHIP_ERROR decodeChar(char c, uint8_t & value)
     return 0;
 }
 
-CHIP_ERROR base41Decode(string base41, vector<uint8_t> & result)
+CHIP_ERROR base41Decode(std::string base41, std::vector<uint8_t> & result)
 {
     result.clear();
 
-    for (int i = 0; base41.length() - i >= kBase41ChunkLen; i += kBase41ChunkLen)
+    for (size_t i = 0; base41.length() - i >= kBase41ChunkLen; i += kBase41ChunkLen)
     {
         uint16_t value = 0;
 
-        for (int iv = i + (kBase41ChunkLen - 1); iv >= i; iv--)
+        for (size_t iv = i + kBase41ChunkLen; iv > i; iv--)
         {
             uint8_t v;
-            CHIP_ERROR err = decodeChar(base41[iv], v);
+            CHIP_ERROR err = decodeChar(base41[iv - 1], v);
 
             if (err != CHIP_NO_ERROR)
             {
                 return err;
             }
 
-            value *= kRadix;
-            value += v;
+            value = static_cast<uint16_t>(value * kRadix + v);
         }
 
-        result.push_back(value % 256);
-        result.push_back(value / 256);
+        result.push_back(static_cast<uint8_t>(value % 256));
+        // Cast is safe, because we divided a uint16_t by 256 to get here,
+        // so what's left has to fit inside uint8_t.
+        result.push_back(static_cast<uint8_t>(value / 256));
     }
 
     if (base41.length() % kBase41ChunkLen != 0) // only 1 or 2 chars left
     {
-        int tail       = (base41.length() % kBase41ChunkLen);
-        int i          = base41.length() - tail;
+        size_t tail    = (base41.length() % kBase41ChunkLen);
+        size_t i       = base41.length() - tail;
         uint16_t value = 0;
 
-        for (int iv = base41.length() - 1; iv >= i; iv--)
+        for (size_t iv = base41.length(); iv > i; iv--)
         {
             uint8_t v;
-            CHIP_ERROR err = decodeChar(base41[iv], v);
+            CHIP_ERROR err = decodeChar(base41[iv - 1], v);
 
             if (err != CHIP_NO_ERROR)
             {
                 return err;
             }
 
-            value *= kRadix;
-            value += v;
+            value = static_cast<uint16_t>(value * kRadix + v);
         }
-        result.push_back(value % 256);
+        result.push_back(static_cast<uint8_t>(value % 256));
         value /= 256;
         if (value != 0)
         {
-            result.push_back(value);
+            // Cast is safe, because we divided a uint16_t by 256 to get here,
+            // so what's left has to fit inside uint8_t.
+            result.push_back(static_cast<uint8_t>(value));
         }
     }
     return CHIP_NO_ERROR;

@@ -103,6 +103,13 @@ class ConnectivityManagerImpl final : public ConnectivityManager,
     // the implementation methods provided by this class.
     friend class ConnectivityManager;
 
+public:
+    CHIP_ERROR ProvisionWiFiNetwork(const char * ssid, const char * key);
+
+#if CHIP_DEVICE_CONFIG_ENABLE_WPA
+    void StartWiFiManagement();
+#endif
+
 private:
     // ===== Members that implement the ConnectivityManager abstract interface.
 
@@ -123,6 +130,17 @@ private:
     bool _IsWiFiStationProvisioned();
     void _ClearWiFiStationProvision();
     bool _CanStartWiFiScan();
+
+    WiFiAPMode _GetWiFiAPMode();
+    CHIP_ERROR _SetWiFiAPMode(WiFiAPMode val);
+    bool _IsWiFiAPActive();
+    bool _IsWiFiAPApplicationControlled();
+    void _DemandStartWiFiAP();
+    void _StopOnDemandWiFiAP();
+    void _MaintainOnDemandWiFiAP();
+    uint32_t _GetWiFiAPIdleTimeoutMS();
+    void _SetWiFiAPIdleTimeoutMS(uint32_t val);
+
     static void _OnWpaProxyReady(GObject * source_object, GAsyncResult * res, gpointer user_data);
     static void _OnWpaInterfaceRemoved(WpaFiW1Wpa_supplicant1 * proxy, const gchar * path, GVariant * properties,
                                        gpointer user_data);
@@ -132,6 +150,15 @@ private:
 
     static uint16_t mConnectivityFlag;
     static struct GDBusWpaSupplicant mWpaSupplicant;
+#endif
+
+    // ==================== ConnectivityManager Private Methods ====================
+
+#if CHIP_DEVICE_CONFIG_ENABLE_WPA
+    void DriveAPState();
+    CHIP_ERROR ConfigureWiFiAP();
+    void ChangeWiFiAPState(WiFiAPState newState);
+    static void DriveAPState(::chip::System::Layer * aLayer, void * aAppState, ::chip::System::Error aError);
 #endif
 
     // ===== Members for internal use by the following friends.
@@ -144,13 +171,39 @@ private:
     // ===== Private members reserved for use by this class only.
 
     ConnectivityManager::WiFiStationMode mWiFiStationMode;
+    ConnectivityManager::WiFiAPMode mWiFiAPMode;
+    WiFiAPState mWiFiAPState;
+    uint64_t mLastAPDemandTime;
     uint32_t mWiFiStationReconnectIntervalMS;
+    uint32_t mWiFiAPIdleTimeoutMS;
 };
+
+#if CHIP_DEVICE_CONFIG_ENABLE_WPA
+inline ConnectivityManager::WiFiAPMode ConnectivityManagerImpl::_GetWiFiAPMode()
+{
+    return mWiFiAPMode;
+}
+
+inline bool ConnectivityManagerImpl::_IsWiFiAPActive()
+{
+    return mWiFiAPState == kWiFiAPState_Active;
+}
+
+inline bool ConnectivityManagerImpl::_IsWiFiAPApplicationControlled()
+{
+    return mWiFiAPMode == kWiFiAPMode_ApplicationControlled;
+}
+
+inline uint32_t ConnectivityManagerImpl::_GetWiFiAPIdleTimeoutMS()
+{
+    return mWiFiAPIdleTimeoutMS;
+}
 
 inline bool ConnectivityManagerImpl::_HaveServiceConnectivity()
 {
     return _HaveServiceConnectivityViaThread();
 }
+#endif
 
 /**
  * Returns the public interface of the ConnectivityManager singleton object.

@@ -533,6 +533,15 @@
 #endif
 
 /**
+ * CHIP_DEVICE_CONFIG_THREAD_FTD
+ *
+ * Enable Full Thread Device features
+ */
+#ifndef CHIP_DEVICE_CONFIG_THREAD_FTD
+#define CHIP_DEVICE_CONFIG_THREAD_FTD 1
+#endif
+
+/**
  * CHIP_DEVICE_CONFIG_THREAD_TASK_NAME
  *
  * The name of the Thread task.
@@ -927,4 +936,13 @@
  */
 #ifndef CHIP_DEVICE_CONFIG_FIRMWARE_BUILD_TIME
 #define CHIP_DEVICE_CONFIG_FIRMWARE_BUILD_TIME __TIME__
+#endif
+
+/**
+ * CHIP_ROTATING_DEVICE_ID
+ *
+ * Sample Rotating Device Id.
+ */
+#ifndef CHIP_ROTATING_DEVICE_ID
+#define CHIP_ROTATING_DEVICE_ID "1122334455667788"
 #endif

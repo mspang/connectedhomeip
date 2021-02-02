@@ -17,11 +17,12 @@
  */
 
 #include "AppTask.h"
+#include "Rpc.h"
 
 #include <platform/CHIPDeviceLayer.h>
 #include <support/CHIPMem.h>
 
-#include <logging/log.h>
+#include <kernel.h>
 
 LOG_MODULE_REGISTER(app);
 
@@ -31,6 +32,10 @@ using namespace ::chip::DeviceLayer;
 
 int main(void)
 {
+#if CONFIG_CHIP_PW_RPC
+    chip::rpc::Init();
+#endif
+
     int ret = 0;
 
     k_thread_priority_set(k_current_get(), K_PRIO_COOP(CONFIG_NUM_COOP_PRIORITIES - 1));
@@ -64,6 +69,13 @@ int main(void)
     if (ret != CHIP_NO_ERROR)
     {
         LOG_ERR("ThreadStackMgr().InitThreadStack() failed");
+        goto exit;
+    }
+
+    ret = ConnectivityMgr().SetThreadDeviceType(ConnectivityManager::kThreadDeviceType_MinimalEndDevice);
+    if (ret != CHIP_NO_ERROR)
+    {
+        LOG_ERR("ConnectivityMgr().SetThreadDeviceType() failed");
         goto exit;
     }
 #endif

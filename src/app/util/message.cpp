@@ -43,6 +43,8 @@
 #include "config.h"
 #include "util.h"
 
+using namespace chip;
+
 //------------------------------------------------------------------------------
 
 // these variables are for storing responses that are created by zcl-utils
@@ -53,7 +55,7 @@
 // receives multiple ZCL messages, the stack will queue these and hand
 // these to the application via emberIncomingMsgHandler one at a time.
 EmberApsFrame emberAfResponseApsFrame;
-ChipNodeId emberAfResponseDestination;
+NodeId emberAfResponseDestination;
 uint8_t appResponseData[EMBER_AF_RESPONSE_BUFFER_LEN];
 uint16_t appResponseLength;
 
@@ -143,7 +145,7 @@ uint8_t * emberAfPutBlockInResp(const uint8_t * data, uint16_t length)
     if ((appResponseLength + length) < EMBER_AF_RESPONSE_BUFFER_LEN)
     {
         memmove(appResponseData + appResponseLength, data, length);
-        appResponseLength += length;
+        appResponseLength = static_cast<uint16_t>(appResponseLength + length);
         return &appResponseData[appResponseLength - length];
     }
     else
@@ -155,7 +157,7 @@ uint8_t * emberAfPutBlockInResp(const uint8_t * data, uint16_t length)
 uint8_t * emberAfPutStringInResp(const uint8_t * buffer)
 {
     uint8_t length = emberAfStringLength(buffer);
-    return emberAfPutBlockInResp(buffer, length + 1);
+    return emberAfPutBlockInResp(buffer, static_cast<uint16_t>(length + 1));
 }
 
 uint8_t * emberAfPutDateInResp(EmberAfDate * value)
@@ -180,11 +182,11 @@ uint8_t * emberAfPutDateInResp(EmberAfDate * value)
 // buffer)
 // ------------------------------------
 
-// retrieves an uint32_t which contains between 1 and 4 bytes of relevent data
+// retrieves an uint64_t which contains between 1 and 8 bytes of relevant data
 // depending on number of bytes requested.
-uint32_t emberAfGetInt(const uint8_t * message, uint16_t currentIndex, uint16_t msgLen, uint8_t bytes)
+uint64_t emberAfGetInt(const uint8_t * message, uint16_t currentIndex, uint16_t msgLen, uint8_t bytes)
 {
-    uint32_t result = 0;
+    uint64_t result = 0;
     uint8_t i       = bytes;
     if ((currentIndex + bytes) > msgLen)
     {
@@ -198,6 +200,11 @@ uint32_t emberAfGetInt(const uint8_t * message, uint16_t currentIndex, uint16_t 
         i--;
     }
     return result;
+}
+
+uint64_t emberAfGetInt64u(const uint8_t * message, uint16_t currentIndex, uint16_t msgLen)
+{
+    return emberAfGetInt(message, currentIndex, msgLen, 8);
 }
 
 uint32_t emberAfGetInt32u(const uint8_t * message, uint16_t currentIndex, uint16_t msgLen)

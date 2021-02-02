@@ -31,8 +31,7 @@ declare_args() {
 show_qr_code = true
 
 # BRD4166A --> ThunderBoard Sense 2 (No LCD)
-# BRD4180A --> GPIO Conflict with Radio and LCD
-if (efr32_board == "BRD4166A" || efr32_board == "BRD4180A") {
+if (efr32_board == "BRD4166A") {
   show_qr_code = false
 }
 
@@ -67,7 +66,8 @@ efr32_executable("lighting_app") {
 
   public_deps = [
     ":sdk",
-    "${chip_root}/examples/common/chip-app-server:chip-app-server",
+    "${chip_root}/examples/common/QRCode",
+    "${chip_root}/examples/lighting-app/lighting-common",
     "${chip_root}/src/lib",
     "${chip_root}/src/setup_payload",
     "${chip_root}/third_party/openthread/platforms:libopenthread-platform",
@@ -79,27 +79,11 @@ efr32_executable("lighting_app") {
   include_dirs += [
     "${efr32_project_dir}/include",
     "${chip_root}/src/app/util",
+    "${chip_root}/src/app/server",
     "${examples_plat_dir}",
-    "${chip_root}/examples/common/QRCode/repo/c",
   ]
 
   sources = [
-    "${chip_root}/examples/common/QRCode/repo/c/qrcodegen.c",
-    "${chip_root}/examples/common/chip-app-server/DataModelHandler.cpp",
-    "${chip_root}/src/app/clusters/on-off-server/on-off.c",
-    "${chip_root}/src/app/util/af-event.cpp",
-    "${chip_root}/src/app/util/af-main-common.cpp",
-    "${chip_root}/src/app/util/attribute-size.c",
-    "${chip_root}/src/app/util/attribute-storage.c",
-    "${chip_root}/src/app/util/attribute-table.c",
-    "${chip_root}/src/app/util/binding-table.cpp",
-    "${chip_root}/src/app/util/chip-message-send.cpp",
-    "${chip_root}/src/app/util/client-api.c",
-    "${chip_root}/src/app/util/ember-print.cpp",
-    "${chip_root}/src/app/util/message.cpp",
-    "${chip_root}/src/app/util/process-cluster-message.c",
-    "${chip_root}/src/app/util/process-global-message.cpp",
-    "${chip_root}/src/app/util/util.cpp",
     "${examples_plat_dir}/${efr32_family}/${efr32_board}/hal-config.h",
     "${examples_plat_dir}/${efr32_family}/${efr32_board}/init_board.c",
     "${examples_plat_dir}/${efr32_family}/${efr32_board}/init_mcu.c",
@@ -110,9 +94,6 @@ efr32_executable("lighting_app") {
     "src/ButtonHandler.cpp",
     "src/LightingManager.cpp",
     "src/ZclCallbacks.cpp",
-    "src/gen/call-command-handler.c",
-    "src/gen/callback-stub.c",
-    "src/gen/znet-bookkeeping.c",
     "src/main.cpp",
   ]
 

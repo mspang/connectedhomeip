@@ -30,22 +30,21 @@
 #include <core/CHIPTLVData.hpp>
 #include <core/CHIPTLVDebug.hpp>
 #include <core/CHIPTLVUtilities.hpp>
-#include <protocols/CHIPProtocols.h>
+#include <protocols/Protocols.h>
 #include <support/CodeUtils.h>
 #include <support/RandUtils.h>
 
 #include <stdlib.h>
 #include <string.h>
 
-using namespace chip;
-using namespace std;
-using namespace chip::TLV;
+namespace chip {
 
 // Populates numberOfBits starting from LSB of input into bits, which is assumed to be zero-initialized
-static CHIP_ERROR populateBits(uint8_t * bits, int & offset, uint64_t input, size_t numberOfBits, size_t totalPayloadDataSizeInBits)
+static CHIP_ERROR populateBits(uint8_t * bits, size_t & offset, uint64_t input, size_t numberOfBits,
+                               size_t totalPayloadDataSizeInBits)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
-    int index;
+    size_t index;
 
     VerifyOrExit(offset + numberOfBits <= totalPayloadDataSizeInBits, err = CHIP_ERROR_INVALID_ARGUMENT);
     VerifyOrExit(input < 1u << numberOfBits, err = CHIP_ERROR_INVALID_ARGUMENT);
@@ -56,7 +55,7 @@ static CHIP_ERROR populateBits(uint8_t * bits, int & offset, uint64_t input, siz
     {
         if (input & 1)
         {
-            bits[index / 8] |= 1 << index % 8;
+            bits[index / 8] |= static_cast<uint8_t>(1 << index % 8);
         }
         index++;
         input >>= 1;
@@ -65,8 +64,8 @@ exit:
     return err;
 }
 
-static CHIP_ERROR populateTLVBits(uint8_t * bits, int & offset, const uint8_t * tlvBuf, size_t tlvBufSizeInBytes,
-                                  int totalPayloadDataSizeInBits)
+static CHIP_ERROR populateTLVBits(uint8_t * bits, size_t & offset, const uint8_t * tlvBuf, size_t tlvBufSizeInBytes,
+                                  size_t totalPayloadDataSizeInBits)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
     for (size_t i = 0; i < tlvBufSizeInBytes; i++)
@@ -81,7 +80,7 @@ static CHIP_ERROR populateTLVBits(uint8_t * bits, int & offset, const uint8_t * 
     return err;
 }
 
-CHIP_ERROR writeTag(TLVWriter & writer, uint64_t tag, OptionalQRCodeInfo & info)
+CHIP_ERROR writeTag(TLV::TLVWriter & writer, uint64_t tag, OptionalQRCodeInfo & info)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
 
@@ -101,7 +100,7 @@ CHIP_ERROR writeTag(TLVWriter & writer, uint64_t tag, OptionalQRCodeInfo & info)
     return err;
 }
 
-CHIP_ERROR writeTag(TLVWriter & writer, uint64_t tag, OptionalQRCodeInfoExtension & info)
+CHIP_ERROR writeTag(TLV::TLVWriter & writer, uint64_t tag, OptionalQRCodeInfoExtension & info)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
 
@@ -130,36 +129,36 @@ CHIP_ERROR writeTag(TLVWriter & writer, uint64_t tag, OptionalQRCodeInfoExtensio
 }
 
 CHIP_ERROR QRCodeSetupPayloadGenerator::generateTLVFromOptionalData(SetupPayload & outPayload, uint8_t * tlvDataStart,
-                                                                    uint32_t maxLen, uint32_t & tlvDataLengthInBytes)
+                                                                    uint32_t maxLen, size_t & tlvDataLengthInBytes)
 {
-    CHIP_ERROR err                                            = CHIP_NO_ERROR;
-    vector<OptionalQRCodeInfo> optionalData                   = outPayload.getAllOptionalVendorData();
-    vector<OptionalQRCodeInfoExtension> optionalExtensionData = outPayload.getAllOptionalExtensionData();
+    CHIP_ERROR err                                                 = CHIP_NO_ERROR;
+    std::vector<OptionalQRCodeInfo> optionalData                   = outPayload.getAllOptionalVendorData();
+    std::vector<OptionalQRCodeInfoExtension> optionalExtensionData = outPayload.getAllOptionalExtensionData();
     VerifyOrExit(!optionalData.empty() || !optionalExtensionData.empty(), err = CHIP_NO_ERROR);
 
-    TLVWriter rootWriter;
+    TLV::TLVWriter rootWriter;
     rootWriter.Init(tlvDataStart, maxLen);
-    rootWriter.ImplicitProfileId = chip::Protocols::kChipProtocol_ServiceProvisioning;
+    rootWriter.ImplicitProfileId = chip::Protocols::kProtocol_ServiceProvisioning;
 
     // The cost (in bytes) of the top-level container is amortized as soon as there is at least 4 optionals elements.
     if ((optionalData.size() + optionalExtensionData.size()) >= 4)
     {
 
-        TLVWriter innerStructureWriter;
+        TLV::TLVWriter innerStructureWriter;
 
-        err = rootWriter.OpenContainer(ProfileTag(rootWriter.ImplicitProfileId, kTag_QRCodeExensionDescriptor), kTLVType_Structure,
-                                       innerStructureWriter);
+        err = rootWriter.OpenContainer(TLV::ProfileTag(rootWriter.ImplicitProfileId, kTag_QRCodeExensionDescriptor),
+                                       TLV::kTLVType_Structure, innerStructureWriter);
         SuccessOrExit(err);
 
         for (OptionalQRCodeInfo info : optionalData)
         {
-            err = writeTag(innerStructureWriter, ContextTag(info.tag), info);
+            err = writeTag(innerStructureWriter, TLV::ContextTag(info.tag), info);
             SuccessOrExit(err);
         }
 
         for (OptionalQRCodeInfoExtension info : optionalExtensionData)
         {
-            err = writeTag(innerStructureWriter, ContextTag(info.tag), info);
+            err = writeTag(innerStructureWriter, TLV::ContextTag(info.tag), info);
             SuccessOrExit(err);
         }
 
@@ -170,13 +169,13 @@ CHIP_ERROR QRCodeSetupPayloadGenerator::generateTLVFromOptionalData(SetupPayload
     {
         for (OptionalQRCodeInfo info : optionalData)
         {
-            err = writeTag(rootWriter, ProfileTag(rootWriter.ImplicitProfileId, info.tag), info);
+            err = writeTag(rootWriter, TLV::ProfileTag(rootWriter.ImplicitProfileId, info.tag), info);
             SuccessOrExit(err);
         }
 
         for (OptionalQRCodeInfoExtension info : optionalExtensionData)
         {
-            err = writeTag(rootWriter, ProfileTag(rootWriter.ImplicitProfileId, info.tag), info);
+            err = writeTag(rootWriter, TLV::ProfileTag(rootWriter.ImplicitProfileId, info.tag), info);
             SuccessOrExit(err);
         }
     }
@@ -189,11 +188,11 @@ exit:
     return err;
 }
 
-static CHIP_ERROR generateBitSet(SetupPayload & payload, uint8_t * bits, uint8_t * tlvDataStart, uint32_t tlvDataLengthInBytes)
+static CHIP_ERROR generateBitSet(SetupPayload & payload, uint8_t * bits, uint8_t * tlvDataStart, size_t tlvDataLengthInBytes)
 {
-    CHIP_ERROR err             = CHIP_NO_ERROR;
-    int offset                 = 0;
-    int totalPayloadSizeInBits = kTotalPayloadDataSizeInBits + (tlvDataLengthInBytes * 8);
+    CHIP_ERROR err                = CHIP_NO_ERROR;
+    size_t offset                 = 0;
+    size_t totalPayloadSizeInBits = kTotalPayloadDataSizeInBits + (tlvDataLengthInBytes * 8);
     err = populateBits(bits, offset, payload.version, kVersionFieldLengthInBits, kTotalPayloadDataSizeInBits);
     err = populateBits(bits, offset, payload.vendorID, kVendorIDFieldLengthInBits, kTotalPayloadDataSizeInBits);
     err = populateBits(bits, offset, payload.productID, kProductIDFieldLengthInBits, kTotalPayloadDataSizeInBits);
@@ -207,12 +206,18 @@ static CHIP_ERROR generateBitSet(SetupPayload & payload, uint8_t * bits, uint8_t
     return err;
 }
 
-static CHIP_ERROR payloadBase41RepresentationWithTLV(SetupPayload & setupPayload, string & base41Representation, size_t bitsetSize,
-                                                     uint8_t * tlvDataStart, size_t tlvDataLengthInBytes)
+// TODO: issue #3663 - Unbounded stack in payloadBase41RepresentationWithTLV()
+#if !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstack-usage="
+#endif
+
+static CHIP_ERROR payloadBase41RepresentationWithTLV(SetupPayload & setupPayload, std::string & base41Representation,
+                                                     size_t bitsetSize, uint8_t * tlvDataStart, size_t tlvDataLengthInBytes)
 {
     uint8_t bits[bitsetSize];
     memset(bits, 0, bitsetSize);
-    string encodedPayload;
+    std::string encodedPayload;
     CHIP_ERROR err = generateBitSet(setupPayload, bits, tlvDataStart, tlvDataLengthInBytes);
     SuccessOrExit(err);
 
@@ -223,18 +228,18 @@ exit:
     return err;
 }
 
-CHIP_ERROR QRCodeSetupPayloadGenerator::payloadBase41Representation(string & base41Representation)
+CHIP_ERROR QRCodeSetupPayloadGenerator::payloadBase41Representation(std::string & base41Representation)
 {
     // 6.1.2.2. Table: Packed Binary Data Structure
     // The TLV Data should be 0 length if TLV is not included.
     return payloadBase41Representation(base41Representation, nullptr, 0);
 }
 
-CHIP_ERROR QRCodeSetupPayloadGenerator::payloadBase41Representation(string & base41Representation, uint8_t * tlvDataStart,
-                                                                    size_t tlvDataStartSize)
+CHIP_ERROR QRCodeSetupPayloadGenerator::payloadBase41Representation(std::string & base41Representation, uint8_t * tlvDataStart,
+                                                                    uint32_t tlvDataStartSize)
 {
-    CHIP_ERROR err                = CHIP_NO_ERROR;
-    uint32_t tlvDataLengthInBytes = 0;
+    CHIP_ERROR err              = CHIP_NO_ERROR;
+    size_t tlvDataLengthInBytes = 0;
 
     VerifyOrExit(mPayload.isValidQRCodePayload(), err = CHIP_ERROR_INVALID_ARGUMENT);
     err = generateTLVFromOptionalData(mPayload, tlvDataStart, tlvDataStartSize, tlvDataLengthInBytes);
@@ -247,3 +252,9 @@ CHIP_ERROR QRCodeSetupPayloadGenerator::payloadBase41Representation(string & bas
 exit:
     return err;
 }
+
+#if !defined(__clang__)
+#pragma GCC diagnostic pop // -Wstack-usage
+#endif
+
+} // namespace chip

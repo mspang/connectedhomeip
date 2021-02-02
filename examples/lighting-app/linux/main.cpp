@@ -19,11 +19,9 @@
 #include <platform/CHIPDeviceLayer.h>
 #include <platform/PlatformManager.h>
 
-#include <platform/Linux/BLEManagerImpl.h>
-
+#include "af.h"
 #include "gen/attribute-id.h"
 #include "gen/cluster-id.h"
-#include "gen/znet-bookkeeping.h"
 #include <app/chip-zcl-zpro-codec.h>
 #include <app/util/af-types.h>
 #include <app/util/attribute-storage.h>
@@ -46,10 +44,7 @@ using namespace chip::Inet;
 using namespace chip::Transport;
 using namespace chip::DeviceLayer;
 
-constexpr uint32_t kDefaultSetupPinCode = 12345678; // TODO: Should be a macro in CHIPProjectConfig.h like other example apps.
-
-extern "C" {
-void emberAfPostAttributeChangeCallback(uint8_t endpoint, EmberAfClusterId clusterId, EmberAfAttributeId attributeId, uint8_t mask,
+void emberAfPostAttributeChangeCallback(EndpointId endpoint, ClusterId clusterId, AttributeId attributeId, uint8_t mask,
                                         uint16_t manufacturerCode, uint8_t type, uint8_t size, uint8_t * value)
 {
     if (clusterId != ZCL_ON_OFF_CLUSTER_ID)
@@ -74,18 +69,24 @@ void emberAfPostAttributeChangeCallback(uint8_t endpoint, EmberAfClusterId clust
     }
 }
 
-/** @brief On/off Cluster Server Post Init
+/** @brief OnOff Cluster Init
  *
- * Following resolution of the On/Off state at startup for this endpoint,
- * perform any additional initialization needed; e.g., synchronize hardware
- * state.
+ * This function is called when a specific cluster is initialized. It gives the
+ * application an opportunity to take care of cluster initialization procedures.
+ * It is called exactly once for each endpoint where cluster is present.
  *
- * @param endpoint Endpoint that is being initialized  Ver.: always
+ * @param endpoint   Ver.: always
+ *
+ * TODO Issue #3841
+ * emberAfOnOffClusterInitCallback happens before the stack initialize the cluster
+ * attributes to the default value.
+ * The logic here expects something similar to the deprecated Plugins callback
+ * emberAfPluginOnOffClusterServerPostInitCallback.
+ *
  */
-void emberAfPluginOnOffClusterServerPostInitCallback(uint8_t endpoint)
+void emberAfOnOffClusterInitCallback(EndpointId endpoint)
 {
-    // TODO: implement any additional On/off Cluster Server post init actions
-}
+    // TODO: implement any additional Cluster Server init actions
 }
 
 namespace {
@@ -110,19 +111,9 @@ CHIP_ERROR PrintQRCodeContent()
     std::string result;
 
     err = ConfigurationMgr().GetSetupPinCode(setUpPINCode);
-    if (err == CHIP_DEVICE_ERROR_CONFIG_NOT_FOUND)
-    {
-        setUpPINCode = kDefaultSetupPinCode;
-        err          = ConfigurationMgr().StoreSetupPinCode(setUpPINCode);
-    }
     SuccessOrExit(err);
 
     err = ConfigurationMgr().GetSetupDiscriminator(setUpDiscriminator);
-    if (err == CHIP_DEVICE_ERROR_CONFIG_NOT_FOUND)
-    {
-        setUpDiscriminator = GetRandU16() & 0xFFF;
-        err                = ConfigurationMgr().StoreSetupDiscriminator(setUpDiscriminator);
-    }
     SuccessOrExit(err);
 
     err = ConfigurationMgr().GetVendorId(vendorId);
@@ -179,13 +170,26 @@ int main(int argc, char * argv[])
 
     chip::DeviceLayer::Internal::BLEMgrImpl().ConfigureBle(LinuxDeviceOptions::GetInstance().mBleDevice, false);
 
-    chip::DeviceLayer::ConnectivityMgr().SetBLEAdvertisingEnabled(
-        chip::DeviceLayer::ConnectivityManager::kCHIPoBLEServiceMode_Enabled);
+    chip::DeviceLayer::ConnectivityMgr().SetBLEAdvertisingEnabled(true);
 
     LightingMgr().Init();
 
     // Init ZCL Data Model and CHIP App Server
     InitServer();
+
+#if CHIP_DEVICE_CONFIG_ENABLE_WPA
+    if (LinuxDeviceOptions::GetInstance().mWiFi)
+    {
+        chip::DeviceLayer::ConnectivityMgrImpl().StartWiFiManagement();
+    }
+#endif // CHIP_DEVICE_CONFIG_ENABLE_WPA
+
+#if CHIP_ENABLE_OPENTHREAD
+    if (LinuxDeviceOptions::GetInstance().mThread)
+    {
+        chip::DeviceLayer::ThreadStackMgrImpl().InitThreadStack();
+    }
+#endif // CHIP_ENABLE_OPENTHREAD
 
     chip::DeviceLayer::PlatformMgr().RunEventLoop();
 

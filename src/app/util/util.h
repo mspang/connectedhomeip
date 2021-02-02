@@ -45,12 +45,7 @@
 // * Copyright 2007-2017 by Silicon Laboratories. All rights reserved.      *80*
 // *******************************************************************
 
-#ifndef __AF_UTIL_H__
-#define __AF_UTIL_H__
-
-#ifdef __cplusplus
-extern "C" {
-#endif // __cplusplus
+#pragma once
 
 // User asserts can override SLAB_ASSERT and should be defined as follows:
 // void userAssert (int file, int line);                   // declaration
@@ -85,15 +80,7 @@ extern const EmberAfClusterName zclClusterNames[];
 
 #define ZCL_NULL_CLUSTER_ID 0xFFFF
 
-#ifdef __cplusplus
-} // extern "C"
-#endif // __cplusplus
-
 #include "af.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif // __cplusplus
 
 // Override APS retry: 0 - don't touch, 1 - always set, 2 - always unset
 typedef enum
@@ -154,18 +141,18 @@ uint16_t emberAfGetMfgCodeFromCurrentCommand(void);
 
 void emberAfInit(void);
 void emberAfTick(void);
-uint16_t emberAfFindClusterNameIndex(uint16_t cluster);
-uint16_t emberAfFindClusterNameIndexWithMfgCode(uint16_t cluster, uint16_t mfgCode);
+uint16_t emberAfFindClusterNameIndex(chip::ClusterId cluster);
+uint16_t emberAfFindClusterNameIndexWithMfgCode(chip::ClusterId cluster, uint16_t mfgCode);
 void emberAfStackDown(void);
 
-void emberAfDecodeAndPrintCluster(uint16_t cluster);
-void emberAfDecodeAndPrintClusterWithMfgCode(uint16_t cluster, uint16_t mfgCode);
+void emberAfDecodeAndPrintCluster(chip::ClusterId cluster);
+void emberAfDecodeAndPrintClusterWithMfgCode(chip::ClusterId cluster, uint16_t mfgCode);
 
 bool emberAfProcessMessage(EmberApsFrame * apsFrame, EmberIncomingMessageType type, uint8_t * message, uint16_t msgLen,
-                           ChipNodeId source, InterPanHeader * interPanHeader);
+                           chip::NodeId source, InterPanHeader * interPanHeader);
 
 bool emberAfProcessMessageIntoZclCmd(EmberApsFrame * apsFrame, EmberIncomingMessageType type, uint8_t * message,
-                                     uint16_t messageLength, ChipNodeId source, InterPanHeader * interPanHeader,
+                                     uint16_t messageLength, chip::NodeId source, InterPanHeader * interPanHeader,
                                      EmberAfClusterCommand * returnCmd);
 
 /**
@@ -178,17 +165,17 @@ bool emberAfProcessMessageIntoZclCmd(EmberApsFrame * apsFrame, EmberIncomingMess
 EmberAfDifferenceType emberAfGetDifference(uint8_t * pData, EmberAfDifferenceType value, uint8_t dataSize);
 
 /**
- * Retrieves an uint32_t from the given Zigbee payload. The integer retrieved
+ * Retrieves an uint64_t from the given Zigbee payload. The integer retrieved
  * may be cast into an integer of the appropriate size depending on the
  * number of bytes requested from the message. In Zigbee, all integers are
  * passed over the air in LSB form. LSB to MSB conversion is
  * done within this function automatically before the integer is returned.
  *
  * Obviously (due to return value) this function can only handle
- * the retrieval of integers between 1 and 4 bytes in length.
+ * the retrieval of integers between 1 and 8 bytes in length.
  *
  */
-uint32_t emberAfGetInt(const uint8_t * message, uint16_t currentIndex, uint16_t msgLen, uint8_t bytes);
+uint64_t emberAfGetInt(const uint8_t * message, uint16_t currentIndex, uint16_t msgLen, uint8_t bytes);
 
 void emberAfClearResponseData(void);
 uint8_t * emberAfPutInt8uInResp(uint8_t value);
@@ -200,16 +187,6 @@ uint8_t * emberAfPutStringInResp(const uint8_t * buffer);
 uint8_t * emberAfPutDateInResp(EmberAfDate * value);
 
 bool emberAfIsThisMyEui64(EmberEUI64 eui64);
-
-// If the variable has not been set, APS_TEST_SECURITY_DEFAULT will
-// eventually return false.
-enum
-{
-    APS_TEST_SECURITY_ENABLED  = 0,
-    APS_TEST_SECURITY_DISABLED = 1,
-    APS_TEST_SECURITY_DEFAULT  = 2,
-};
-extern uint8_t emAfTestApsSecurityOverride;
 
 #ifdef EZSP_HOST
 // the EM260 host application is expected to provide these functions if using
@@ -227,12 +204,6 @@ extern uint8_t emberAfIncomingZclSequenceNumber;
 // reply (in the case where the app disables it and then doesnt send a
 // message that gets parsed).
 void emberAfSetNoReplyForNextMessage(bool set);
-
-// this function determines if APS Link key should be used to secure
-// the message. It is based on the clusterId and specified in the SE
-// app profile.  If the message is outgoing then the
-bool emberAfDetermineIfLinkSecurityIsRequired(uint8_t commandId, bool incoming, bool broadcast, EmberAfProfileId profileId,
-                                              EmberAfClusterId clusterId, ChipNodeId remoteNodeId);
 
 #define isThisDataTypeSentLittleEndianOTA(dataType) (!(emberAfIsThisDataTypeAStringType(dataType)))
 
@@ -312,9 +283,3 @@ uint8_t emberAfGetChannelFrom8bitEncodedChanPg(uint8_t chanPg);
  * @return 8-bit encoded channel-page, 0xFF if invalid
  */
 uint8_t emberAfMake8bitEncodedChanPg(uint8_t page, uint8_t channel);
-
-#ifdef __cplusplus
-} // extern "C"
-#endif // __cplusplus
-
-#endif // __AF_UTIL_H__

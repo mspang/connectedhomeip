@@ -38,6 +38,10 @@
 // Enable support functions for parsing command-line arguments
 #define CHIP_CONFIG_ENABLE_ARG_PARSER 1
 
+// Use a default pairing code if one hasn't been provisioned in flash.
+#define CHIP_DEVICE_CONFIG_USE_TEST_SETUP_PIN_CODE 12345678
+#define CHIP_DEVICE_CONFIG_USE_TEST_SETUP_DISCRIMINATOR 0xF00
+
 // Enable reading DRBG seed data from /dev/(u)random.
 // This is needed for test applications and the CHIP device manager to function
 // properly when CHIP_CONFIG_RNG_IMPLEMENTATION_CHIPDRBG is enabled.
@@ -66,5 +70,7 @@
 #define CHIP_CONFIG_ENABLE_FUNCT_ERROR_LOGGING 1
 
 #define CHIP_CONFIG_DATA_MANAGEMENT_CLIENT_EXPERIMENTAL 1
+
+#define CHIP_DEVICE_CONFIG_ENABLE_TEST_DEVICE_IDENTITY 1
 
 #endif /* CHIPPROJECTCONFIG_H */

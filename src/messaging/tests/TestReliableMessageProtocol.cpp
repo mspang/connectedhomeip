@@ -27,26 +27,79 @@
 #include <core/CHIPCore.h>
 #include <messaging/ReliableMessageContext.h>
 #include <messaging/ReliableMessageManager.h>
-#include <protocols/CHIPProtocols.h>
+#include <protocols/Protocols.h>
+#include <protocols/echo/Echo.h>
 #include <support/CodeUtils.h>
-#include <transport/raw/tests/NetworkTestHelpers.h>
+#include <support/ReturnMacros.h>
+#include <transport/SecureSessionMgr.h>
+#include <transport/TransportMgr.h>
 
 #include <nlbyteorder.h>
 #include <nlunit-test.h>
 
 #include <errno.h>
 
+#include <messaging/ExchangeContext.h>
+#include <messaging/ExchangeMgr.h>
+#include <messaging/Flags.h>
+#include <messaging/tests/MessagingContext.h>
+
 namespace {
 
 using namespace chip;
 using namespace chip::Inet;
-using namespace chip::messaging;
+using namespace chip::Transport;
+using namespace chip::Messaging;
+using namespace chip::Protocols;
 
-using TestContext = chip::Test::IOContext;
+using TestContext = chip::Test::MessagingContext;
 
 TestContext sContext;
 
-ReliableMessageManager manager;
+const char PAYLOAD[] = "Hello!";
+
+int gSendMessageCount = 0;
+
+class OutgoingTransport : public Transport::Base
+{
+public:
+    /// Transports are required to have a constructor that takes exactly one argument
+    CHIP_ERROR Init(const char * unused) { return CHIP_NO_ERROR; }
+
+    CHIP_ERROR SendMessage(const PacketHeader & header, const PeerAddress & address, System::PacketBufferHandle msgBuf) override
+    {
+        const uint16_t headerSize = header.EncodeSizeBytes();
+
+        VerifyOrReturnError(msgBuf->EnsureReservedSize(headerSize), CHIP_ERROR_NO_MEMORY);
+
+        msgBuf->SetStart(msgBuf->Start() - headerSize);
+
+        uint16_t actualEncodedHeaderSize;
+        ReturnErrorOnFailure(header.Encode(msgBuf->Start(), msgBuf->DataLength(), &actualEncodedHeaderSize));
+
+        gSendMessageCount++;
+
+        return CHIP_NO_ERROR;
+    }
+
+    bool CanSendToPeer(const PeerAddress & address) override { return true; }
+};
+
+TransportMgr<OutgoingTransport> gTransportMgr;
+
+class MockAppDelegate : public ExchangeDelegate
+{
+public:
+    void OnMessageReceived(ExchangeContext * ec, const PacketHeader & packetHeader, uint32_t protocolId, uint8_t msgType,
+                           System::PacketBufferHandle buffer) override
+    {
+        IsOnMessageReceivedCalled = true;
+    }
+
+    void OnResponseTimeout(ExchangeContext * ec) override {}
+
+    bool IsOnMessageReceivedCalled = false;
+};
 
 void test_os_sleep_ms(uint64_t millisecs)
 {
@@ -66,8 +119,6 @@ public:
     ~ReliableMessageDelegateObject() override {}
 
     /* Application callbacks */
-    void OnThrottleRcvd(uint32_t pauseTime) override {}
-    void OnDelayedDeliveryRcvd(uint32_t pauseTime) override {}
     void OnSendError(CHIP_ERROR err) override { SendErrorCalled = true; }
     void OnAckRcvd() override {}
 
@@ -77,119 +128,98 @@ public:
 void CheckAddClearRetrans(nlTestSuite * inSuite, void * inContext)
 {
     TestContext & ctx = *reinterpret_cast<TestContext *>(inContext);
-    auto & m          = manager;
-    m.Init(ctx.GetSystemLayer());
-    ReliableMessageContext rc;
-    rc.Init(&m);
+
+    MockAppDelegate mockAppDelegate;
+    ExchangeContext * exchange = ctx.NewExchangeToPeer(&mockAppDelegate);
+    NL_TEST_ASSERT(inSuite, exchange != nullptr);
+
+    ReliableMessageManager * rm = ctx.GetExchangeManager().GetReliableMessageMgr();
+    ReliableMessageContext * rc = exchange->GetReliableMessageContext();
+    NL_TEST_ASSERT(inSuite, rm != nullptr);
+    NL_TEST_ASSERT(inSuite, rc != nullptr);
+
     ReliableMessageManager::RetransTableEntry * entry;
-    m.AddToRetransTable(&rc, nullptr, 1, 0, &entry);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 1);
-    m.ClearRetransmitTable(*entry);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 0);
-    m.Shutdown();
+
+    rm->AddToRetransTable(rc, &entry);
+    NL_TEST_ASSERT(inSuite, rm->TestGetCountRetransTable() == 1);
+    rm->ClearRetransTable(*entry);
+    NL_TEST_ASSERT(inSuite, rm->TestGetCountRetransTable() == 0);
 }
 
 void CheckFailRetrans(nlTestSuite * inSuite, void * inContext)
 {
     TestContext & ctx = *reinterpret_cast<TestContext *>(inContext);
-    auto & m          = manager;
-    m.Init(ctx.GetSystemLayer());
-    ReliableMessageContext rc;
-    rc.Init(&m);
-    ReliableMessageDelegateObject delegate;
-    rc.SetDelegate(&delegate);
+
+    ctx.GetInetLayer().SystemLayer()->Init(nullptr);
+
+    MockAppDelegate mockAppDelegate;
+    ExchangeContext * exchange = ctx.NewExchangeToPeer(&mockAppDelegate);
+    NL_TEST_ASSERT(inSuite, exchange != nullptr);
+
+    ReliableMessageManager * rm = ctx.GetExchangeManager().GetReliableMessageMgr();
+    ReliableMessageContext * rc = exchange->GetReliableMessageContext();
+    NL_TEST_ASSERT(inSuite, rm != nullptr);
+    NL_TEST_ASSERT(inSuite, rc != nullptr);
+
     ReliableMessageManager::RetransTableEntry * entry;
-    auto buf = System::PacketBuffer::New();
-    m.AddToRetransTable(&rc, buf, 1, 0, &entry);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 1);
+    ReliableMessageDelegateObject delegate;
+    rc->SetDelegate(&delegate);
+    rm->AddToRetransTable(rc, &entry);
+    NL_TEST_ASSERT(inSuite, rm->TestGetCountRetransTable() == 1);
     NL_TEST_ASSERT(inSuite, !delegate.SendErrorCalled);
-    m.FailRetransmitTableEntries(&rc, CHIP_NO_ERROR);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 0);
+    rm->FailRetransTableEntries(rc, CHIP_NO_ERROR);
+    NL_TEST_ASSERT(inSuite, rm->TestGetCountRetransTable() == 0);
     NL_TEST_ASSERT(inSuite, delegate.SendErrorCalled);
-    m.Shutdown();
 }
 
-void CheckRetransExpire(nlTestSuite * inSuite, void * inContext)
+void CheckResendMessage(nlTestSuite * inSuite, void * inContext)
 {
     TestContext & ctx = *reinterpret_cast<TestContext *>(inContext);
-    auto & m          = manager;
-    m.TestSetIntervalShift(4); // 16ms per tick
-    m.Init(ctx.GetSystemLayer());
-    ReliableMessageContext rc;
-    rc.Init(&m);
-    ReliableMessageDelegateObject delegate;
-    rc.SetDelegate(&delegate);
-    rc.SetConfig({
+
+    uint16_t payload_len = sizeof(PAYLOAD);
+
+    ctx.GetInetLayer().SystemLayer()->Init(nullptr);
+
+    chip::System::PacketBufferHandle buffer = chip::System::PacketBuffer::NewWithAvailableSize(payload_len);
+    NL_TEST_ASSERT(inSuite, !buffer.IsNull());
+
+    memmove(buffer->Start(), PAYLOAD, payload_len);
+    buffer->SetDataLength(payload_len);
+
+    CHIP_ERROR err = CHIP_NO_ERROR;
+
+    MockAppDelegate mockSender;
+    // TODO: temprary create a SecureSessionHandle from node id, will be fix in PR 3602
+    ExchangeContext * exchange = ctx.NewExchangeToPeer(&mockSender);
+    NL_TEST_ASSERT(inSuite, exchange != nullptr);
+
+    ReliableMessageManager * rm = ctx.GetExchangeManager().GetReliableMessageMgr();
+    ReliableMessageContext * rc = exchange->GetReliableMessageContext();
+    NL_TEST_ASSERT(inSuite, rm != nullptr);
+    NL_TEST_ASSERT(inSuite, rc != nullptr);
+
+    rc->SetConfig({
         1, // CHIP_CONFIG_RMP_DEFAULT_INITIAL_RETRANS_TIMEOUT_TICK
         1, // CHIP_CONFIG_RMP_DEFAULT_ACTIVE_RETRANS_TIMEOUT_TICK
         1, // CHIP_CONFIG_RMP_DEFAULT_ACK_TIMEOUT_TICK
-        2, // CHIP_CONFIG_RMP_DEFAULT_MAX_RETRANS
+        3, // CHIP_CONFIG_RMP_DEFAULT_MAX_RETRANS
     });
-    ReliableMessageManager::RetransTableEntry * entry;
-    auto buf = System::PacketBuffer::New();
-    m.AddToRetransTable(&rc, buf, 1, 0, &entry);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 1);
 
-    test_os_sleep_ms(20);
-    ReliableMessageManager::Timeout(&ctx.GetSystemLayer(), &m, CHIP_SYSTEM_NO_ERROR);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 1);
-    // 1st retrans
+    gSendMessageCount = 0;
 
-    test_os_sleep_ms(20);
-    ReliableMessageManager::Timeout(&ctx.GetSystemLayer(), &m, CHIP_SYSTEM_NO_ERROR);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 1);
-    NL_TEST_ASSERT(inSuite, !delegate.SendErrorCalled);
-    // 2nd retrans
+    err = exchange->SendMessage(kProtocol_Echo, Echo::kEchoMessageType_EchoRequest, std::move(buffer),
+                                Messaging::SendFlags(Messaging::SendMessageFlags::kNone));
+    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
 
-    test_os_sleep_ms(20);
-    ReliableMessageManager::Timeout(&ctx.GetSystemLayer(), &m, CHIP_SYSTEM_NO_ERROR);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 0);
-    NL_TEST_ASSERT(inSuite, delegate.SendErrorCalled);
-    // send error
+    // 1 tick is 64 ms, sleep 65 ms to trigger first re-transmit
+    test_os_sleep_ms(65);
+    ReliableMessageManager::Timeout(&ctx.GetSystemLayer(), rm, CHIP_SYSTEM_NO_ERROR);
+    NL_TEST_ASSERT(inSuite, gSendMessageCount == 2);
 
-    m.Shutdown();
-}
-
-void CheckDelayDelivery(nlTestSuite * inSuite, void * inContext)
-{
-    TestContext & ctx = *reinterpret_cast<TestContext *>(inContext);
-    auto & m          = manager;
-    m.TestSetIntervalShift(4); // 16ms per tick
-    m.Init(ctx.GetSystemLayer());
-    ReliableMessageContext rc;
-    rc.Init(&m);
-    ReliableMessageDelegateObject delegate;
-    rc.SetDelegate(&delegate);
-    rc.SetConfig({
-        1, // CHIP_CONFIG_RMP_DEFAULT_INITIAL_RETRANS_TIMEOUT_TICK
-        1, // CHIP_CONFIG_RMP_DEFAULT_ACTIVE_RETRANS_TIMEOUT_TICK
-        1, // CHIP_CONFIG_RMP_DEFAULT_ACK_TIMEOUT_TICK
-        1, // CHIP_CONFIG_RMP_DEFAULT_MAX_RETRANS
-    });
-    ReliableMessageManager::RetransTableEntry * entry;
-    auto buf = System::PacketBuffer::New();
-    m.AddToRetransTable(&rc, buf, 1, 0, &entry);
-    m.ProcessDelayedDeliveryMessage(&rc, 64);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 1);
-
-    test_os_sleep_ms(50);
-    ReliableMessageManager::Timeout(&ctx.GetSystemLayer(), &m, CHIP_SYSTEM_NO_ERROR);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 1);
-    // not send, delayed
-
-    test_os_sleep_ms(50);
-    ReliableMessageManager::Timeout(&ctx.GetSystemLayer(), &m, CHIP_SYSTEM_NO_ERROR);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 1);
-    NL_TEST_ASSERT(inSuite, !delegate.SendErrorCalled);
-    // 1st retrans
-
-    test_os_sleep_ms(20);
-    ReliableMessageManager::Timeout(&ctx.GetSystemLayer(), &m, CHIP_SYSTEM_NO_ERROR);
-    NL_TEST_ASSERT(inSuite, m.TestGetCountRetransTable() == 0);
-    NL_TEST_ASSERT(inSuite, delegate.SendErrorCalled);
-    // send error
-
-    m.Shutdown();
+    // sleep another 65 ms to trigger second re-transmit
+    test_os_sleep_ms(65);
+    ReliableMessageManager::Timeout(&ctx.GetSystemLayer(), rm, CHIP_SYSTEM_NO_ERROR);
+    NL_TEST_ASSERT(inSuite, gSendMessageCount == 3);
 }
 
 // Test Suite
@@ -202,8 +232,7 @@ const nlTest sTests[] =
 {
     NL_TEST_DEF("Test ReliableMessageManager::CheckAddClearRetrans", CheckAddClearRetrans),
     NL_TEST_DEF("Test ReliableMessageManager::CheckFailRetrans", CheckFailRetrans),
-    NL_TEST_DEF("Test ReliableMessageManager::CheckRetransExpire", CheckRetransExpire),
-    NL_TEST_DEF("Test ReliableMessageManager::CheckDelayDelivery", CheckDelayDelivery),
+    NL_TEST_DEF("Test ReliableMessageManager::CheckResendMessage", CheckResendMessage),
 
     NL_TEST_SENTINEL()
 };
@@ -227,7 +256,11 @@ nlTestSuite sSuite =
  */
 int Initialize(void * aContext)
 {
-    CHIP_ERROR err = reinterpret_cast<TestContext *>(aContext)->Init(&sSuite);
+    CHIP_ERROR err = gTransportMgr.Init("LOOPBACK");
+    if (err != CHIP_NO_ERROR)
+        return FAILURE;
+
+    err = reinterpret_cast<TestContext *>(aContext)->Init(&sSuite, &gTransportMgr);
     return (err == CHIP_NO_ERROR) ? SUCCESS : FAILURE;
 }
 
@@ -241,24 +274,6 @@ int Finalize(void * aContext)
 }
 
 } // namespace
-
-namespace chip {
-namespace messaging {
-
-// Stub implementation
-CHIP_ERROR ReliableMessageManager::SendMessage(ReliableMessageContext * context, System::PacketBuffer * msgBuf, uint16_t sendFlags)
-{
-    return CHIP_NO_ERROR;
-}
-CHIP_ERROR ReliableMessageManager::SendMessage(ReliableMessageContext * context, uint32_t profileId, uint8_t msgType,
-                                               System::PacketBuffer * msgBuf, BitFlags<uint16_t, SendMessageFlags> sendFlags)
-{
-    return CHIP_NO_ERROR;
-}
-void ReliableMessageManager::FreeContext(ReliableMessageContext *) {}
-
-} // namespace messaging
-} // namespace chip
 
 /**
  *  Main

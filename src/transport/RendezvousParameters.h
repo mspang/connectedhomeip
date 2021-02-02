@@ -18,7 +18,7 @@
 #pragma once
 
 #include <transport/raw/Base.h>
-
+#include <transport/raw/PeerAddress.h>
 #if CONFIG_NETWORK_LAYER_BLE
 #include <ble/Ble.h>
 #endif // CONFIG_NETWORK_LAYER_BLE
@@ -26,6 +26,9 @@
 #include <support/logging/CHIPLogging.h>
 
 namespace chip {
+
+// The largest supported value for Rendezvous discriminators
+const uint16_t kMaxRendezvousDiscriminatorValue = 0xFFF;
 
 class RendezvousParameters
 {
@@ -42,7 +45,15 @@ public:
         return *this;
     }
 
-    bool HasDiscriminator() const { return mDiscriminator != 0; }
+    bool HasPeerAddress() const { return mPeerAddress.IsInitialized(); }
+    Transport::PeerAddress GetPeerAddress() const { return mPeerAddress; }
+    RendezvousParameters & SetPeerAddress(const Transport::PeerAddress & peerAddress)
+    {
+        mPeerAddress = peerAddress;
+        return *this;
+    }
+
+    bool HasDiscriminator() const { return mDiscriminator <= kMaxRendezvousDiscriminatorValue; }
     uint16_t GetDiscriminator() const { return mDiscriminator; }
     RendezvousParameters & SetDiscriminator(uint16_t discriminator)
     {
@@ -55,6 +66,14 @@ public:
     RendezvousParameters & SetLocalNodeId(NodeId nodeId)
     {
         mLocalNodeId.SetValue(nodeId);
+        return *this;
+    }
+
+    bool HasRemoteNodeId() const { return mRemoteNodeId.HasValue(); }
+    const Optional<NodeId> GetRemoteNodeId() const { return mRemoteNodeId; }
+    RendezvousParameters & SetRemoteNodeId(NodeId nodeId)
+    {
+        mRemoteNodeId.SetValue(nodeId);
         return *this;
     }
 
@@ -79,9 +98,11 @@ public:
 #endif // CONFIG_NETWORK_LAYER_BLE
 
 private:
-    Optional<NodeId> mLocalNodeId; ///< the local node id
-    uint32_t mSetupPINCode  = 0;   ///< the target peripheral setup PIN Code
-    uint16_t mDiscriminator = 0;   ///< the target peripheral discriminator
+    Optional<NodeId> mLocalNodeId;        ///< the local node id
+    Transport::PeerAddress mPeerAddress;  ///< the peer node address
+    Optional<NodeId> mRemoteNodeId;       ///< the remote node id
+    uint32_t mSetupPINCode  = 0;          ///< the target peripheral setup PIN Code
+    uint16_t mDiscriminator = UINT16_MAX; ///< the target peripheral discriminator
 
 #if CONFIG_NETWORK_LAYER_BLE
     Ble::BleLayer * mBleLayer               = nullptr;

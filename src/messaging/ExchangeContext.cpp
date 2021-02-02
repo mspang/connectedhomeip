@@ -36,7 +36,8 @@
 #include <core/CHIPEncoding.h>
 #include <messaging/ExchangeContext.h>
 #include <messaging/ExchangeMgr.h>
-#include <protocols/CHIPProtocols.h>
+#include <protocols/Protocols.h>
+#include <protocols/secure_channel/Constants.h>
 #include <support/logging/CHIPLogging.h>
 #include <system/SystemTimer.h>
 
@@ -45,14 +46,13 @@ using namespace chip::Inet;
 using namespace chip::System;
 
 namespace chip {
+namespace Messaging {
 
 static void DefaultOnMessageReceived(ExchangeContext * ec, const PacketHeader & packetHeader, uint32_t protocolId, uint8_t msgType,
-                                     PacketBuffer * payload)
+                                     PacketBufferHandle payload)
 {
     ChipLogError(ExchangeManager, "Dropping unexpected message %08" PRIX32 ":%d %04" PRIX16 " MsgId:%08" PRIX32, protocolId,
                  msgType, ec->GetExchangeId(), packetHeader.GetMessageId());
-
-    PacketBuffer::Free(payload);
 }
 
 bool ExchangeContext::IsInitiator() const
@@ -65,41 +65,65 @@ bool ExchangeContext::IsResponseExpected() const
     return mFlags.Has(ExFlagValues::kFlagResponseExpected);
 }
 
-void ExchangeContext::SetInitiator(bool inInitiator)
-{
-    mFlags.Set(ExFlagValues::kFlagInitiator, inInitiator);
-}
-
 void ExchangeContext::SetResponseExpected(bool inResponseExpected)
 {
     mFlags.Set(ExFlagValues::kFlagResponseExpected, inResponseExpected);
 }
 
-CHIP_ERROR ExchangeContext::SendMessage(uint16_t protocolId, uint8_t msgType, PacketBuffer * msgBuf, uint16_t sendFlags,
-                                        void * msgCtxt)
+void ExchangeContext::SetResponseTimeout(Timeout timeout)
+{
+    mResponseTimeout = timeout;
+}
+
+CHIP_ERROR ExchangeContext::SendMessage(uint16_t protocolId, uint8_t msgType, PacketBufferHandle msgBuf,
+                                        const SendFlags & sendFlags, void * msgCtxt)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
     PayloadHeader payloadHeader;
+    Transport::PeerConnectionState * state = nullptr;
 
     // Don't let method get called on a freed object.
-    VerifyOrDie(mExchangeMgr != nullptr && mRefCount != 0);
+    VerifyOrDie(mExchangeMgr != nullptr && GetReferenceCount() > 0);
 
     // we hold the exchange context here in case the entity that
     // originally generated it tries to close it as a result of
     // an error arising below. at the end, we have to close it.
-    AddRef();
+    Retain();
 
     // Set the exchange ID for this header.
     payloadHeader.SetExchangeID(mExchangeId);
 
-    // Set the protocol ID for this header.
-    payloadHeader.SetProtocolID(protocolId);
+    // Set the protocol ID and message type for this header.
+    payloadHeader.SetMessageType(protocolId, msgType);
 
-    // Set the message type for this header.
-    payloadHeader.SetMessageType(msgType);
+    payloadHeader.SetInitiator(IsInitiator());
+
+    // If sending via UDP and auto-request ACK feature is enabled, automatically request an acknowledgment,
+    // UNLESS the NoAutoRequestAck send flag has been specified.
+    state = mExchangeMgr->GetSessionMgr()->GetPeerConnectionState(mSecureSession);
+    VerifyOrExit(state != nullptr, err = CHIP_ERROR_NOT_CONNECTED);
+    if ((state->GetPeerAddress().GetTransportType() == Transport::Type::kUdp) && mReliableMessageContext.AutoRequestAck() &&
+        !sendFlags.Has(SendMessageFlags::kNoAutoRequestAck))
+    {
+        payloadHeader.SetNeedsAck(true);
+    }
+
+    // If there is a pending acknowledgment piggyback it on this message.
+    if (mReliableMessageContext.HasPeerRequestedAck())
+    {
+        payloadHeader.SetAckId(mReliableMessageContext.mPendingPeerAckId);
+
+        // Set AckPending flag to false since current outgoing message is going to serve as the ack on this exchange.
+        mReliableMessageContext.SetAckPending(false);
+
+#if !defined(NDEBUG)
+        ChipLogProgress(ExchangeManager, "Piggybacking Ack for MsgId:%08" PRIX32 " with msg",
+                        mReliableMessageContext.mPendingPeerAckId);
+#endif
+    }
 
     // If a response message is expected...
-    if ((sendFlags & kSendFlag_ExpectResponse) != 0)
+    if (sendFlags.Has(SendMessageFlags::kExpectResponse))
     {
         // Only one 'response expected' message can be outstanding at a time.
         VerifyOrExit(!IsResponseExpected(), err = CHIP_ERROR_INCORRECT_STATE);
@@ -114,21 +138,39 @@ CHIP_ERROR ExchangeContext::SendMessage(uint16_t protocolId, uint8_t msgType, Pa
         }
     }
 
-    payloadHeader.SetInitiator(IsInitiator());
+    // Send the message.
+    if (payloadHeader.IsNeedsAck())
+    {
+        ReliableMessageManager::RetransTableEntry * entry = nullptr;
 
-    err    = mExchangeMgr->GetSessionMgr()->SendMessage(payloadHeader, mPeerNodeId, msgBuf);
-    msgBuf = nullptr;
-    SuccessOrExit(err);
+        // Add to Table for subsequent sending
+        err = mExchangeMgr->GetReliableMessageMgr()->AddToRetransTable(&mReliableMessageContext, &entry);
+        SuccessOrExit(err);
+
+        err = mExchangeMgr->GetSessionMgr()->SendMessage(mSecureSession, payloadHeader, std::move(msgBuf), &entry->retainedBuf);
+
+        if (err != CHIP_NO_ERROR)
+        {
+            // Remove from table
+            ChipLogError(ExchangeManager, "Failed to send message with err %ld", long(err));
+            mExchangeMgr->GetReliableMessageMgr()->ClearRetransTable(*entry);
+        }
+        else
+        {
+            mExchangeMgr->GetReliableMessageMgr()->StartRetransmision(entry);
+        }
+    }
+    else
+    {
+        err = mExchangeMgr->GetSessionMgr()->SendMessage(mSecureSession, payloadHeader, std::move(msgBuf));
+        SuccessOrExit(err);
+    }
 
 exit:
     if (err != CHIP_NO_ERROR && IsResponseExpected())
     {
         CancelResponseTimer();
         SetResponseExpected(false);
-    }
-    if (msgBuf != nullptr && (sendFlags & kSendFlag_RetainBuffer) == 0)
-    {
-        PacketBuffer::Free(msgBuf);
     }
 
     // Release the reference to the exchange context acquired above. Under normal circumstances
@@ -141,23 +183,27 @@ exit:
     return err;
 }
 
-/**
- *  Increment the reference counter for the exchange context by one.
- *
- */
-void ExchangeContext::AddRef()
-{
-    mRefCount++;
-#if defined(CHIP_EXCHANGE_CONTEXT_DETAIL_LOGGING)
-    ChipLogProgress(ExchangeManager, "ec id: %d [%04" PRIX16 "], refCount++: %d", (this - mExchangeMgr->ContextPool + 1),
-                    mExchangeId, mRefCount);
-#endif
-}
-
 void ExchangeContext::DoClose(bool clearRetransTable)
 {
     // Clear protocol callbacks
+    if (mDelegate != nullptr)
+    {
+        mDelegate->OnExchangeClosing(this);
+    }
     mDelegate = nullptr;
+
+    // Closure of an exchange context is based on ref counting. The Protocol, when it calls DoClose(), indicates that
+    // it is done with the exchange context and the message layer sets all callbacks to NULL and does not send anything
+    // received on the exchange context up to higher layers.  At this point, the message layer needs to handle the
+    // remaining work to be done on that exchange, (e.g. send all pending acks) before truly cleaning it up.
+    mReliableMessageContext.FlushAcks();
+
+    // In case the protocol wants a harder release of the EC right away, such as calling Abort(), exchange
+    // needs to clear the CRMP retransmission table immediately.
+    if (clearRetransTable)
+    {
+        mExchangeMgr->GetReliableMessageMgr()->ClearRetransTable(&mReliableMessageContext);
+    }
 
     // Cancel the response timer.
     CancelResponseTimer();
@@ -171,7 +217,7 @@ void ExchangeContext::DoClose(bool clearRetransTable)
  */
 void ExchangeContext::Close()
 {
-    VerifyOrDie(mExchangeMgr != nullptr && mRefCount != 0);
+    VerifyOrDie(mExchangeMgr != nullptr && GetReferenceCount() > 0);
 
 #if defined(CHIP_EXCHANGE_CONTEXT_DETAIL_LOGGING)
     ChipLogProgress(ExchangeManager, "ec id: %d [%04" PRIX16 "], %s", (this - mExchangeMgr->ContextPool + 1), mExchangeId,
@@ -188,7 +234,7 @@ void ExchangeContext::Close()
  */
 void ExchangeContext::Abort()
 {
-    VerifyOrDie(mExchangeMgr != nullptr && mRefCount != 0);
+    VerifyOrDie(mExchangeMgr != nullptr && GetReferenceCount() > 0);
 
 #if defined(CHIP_EXCHANGE_CONTEXT_DETAIL_LOGGING)
     ChipLogProgress(ExchangeManager, "ec id: %d [%04" PRIX16 "], %s", (this - mExchangeMgr->ContextPool + 1), mExchangeId,
@@ -199,49 +245,59 @@ void ExchangeContext::Abort()
     Release();
 }
 
-/**
- *  Release reference to this exchange context. If count is down
- *  to one then close the context, reset all protocol callbacks,
- *  and stop all timers.
- *
- */
-void ExchangeContext::Release()
+void ExchangeContext::Reset()
 {
-    VerifyOrDie(mExchangeMgr != nullptr && mRefCount != 0);
-
-    if (mRefCount == 1)
-    {
-        // Ideally, in this scenario, the retransmit table should
-        // be clear of any outstanding messages for this context and
-        // the boolean parameter passed to DoClose() should not matter.
-        ExchangeManager * em = mExchangeMgr;
-#if defined(CHIP_EXCHANGE_CONTEXT_DETAIL_LOGGING)
-        uint16_t tmpid = mExchangeId;
-#endif
-
-        DoClose(false);
-        mRefCount    = 0;
-        mExchangeMgr = nullptr;
-
-        em->DecrementContextsInUse();
-
-#if defined(CHIP_EXCHANGE_CONTEXT_DETAIL_LOGGING)
-        ChipLogProgress(ExchangeManager, "ec-- id: %d [%04" PRIX16 "], inUse: %d, addr: 0x%x", (this - em->ContextPool + 1), tmpid,
-                        em->GetContextsInUse(), this);
-#endif
-        SYSTEM_STATS_DECREMENT(chip::System::Stats::kExchangeMgr_NumContexts);
-    }
-    else
-    {
-        mRefCount--;
-#if defined(CHIP_EXCHANGE_CONTEXT_DETAIL_LOGGING)
-        ChipLogProgress(ExchangeManager, "ec id: %d [%04" PRIX16 "], refCount--: %d", (this - mExchangeMgr->ContextPool + 1),
-                        mExchangeId, mRefCount);
-#endif
-    }
+    *this = ExchangeContext();
 }
 
-bool ExchangeContext::MatchExchange(const PacketHeader & packetHeader, const PayloadHeader & payloadHeader)
+ExchangeContext * ExchangeContext::Alloc(ExchangeManager * em, uint16_t ExchangeId, SecureSessionHandle session, bool Initiator,
+                                         ExchangeDelegate * delegate)
+{
+    VerifyOrDie(mExchangeMgr == nullptr && GetReferenceCount() == 0);
+
+    Reset();
+    Retain();
+    mExchangeMgr = em;
+    em->IncrementContextsInUse();
+    mExchangeId    = ExchangeId;
+    mSecureSession = session;
+    mFlags.Set(ExFlagValues::kFlagInitiator, Initiator);
+    mDelegate = delegate;
+
+    mReliableMessageContext.Init(em->GetReliableMessageMgr(), this);
+
+#if defined(CHIP_EXCHANGE_CONTEXT_DETAIL_LOGGING)
+    ChipLogProgress(ExchangeManager, "ec++ id: %d, inUse: %d, addr: 0x%x", (this - em->ContextPool + 1), em->GetContextsInUse(),
+                    this);
+#endif
+    SYSTEM_STATS_INCREMENT(chip::System::Stats::kExchangeMgr_NumContexts);
+
+    return this;
+}
+
+void ExchangeContext::Free()
+{
+    VerifyOrDie(mExchangeMgr != nullptr && GetReferenceCount() == 0);
+
+    // Ideally, in this scenario, the retransmit table should
+    // be clear of any outstanding messages for this context and
+    // the boolean parameter passed to DoClose() should not matter.
+    ExchangeManager * em = mExchangeMgr;
+
+    DoClose(false);
+    mExchangeMgr = nullptr;
+
+    em->DecrementContextsInUse();
+
+#if defined(CHIP_EXCHANGE_CONTEXT_DETAIL_LOGGING)
+    ChipLogProgress(ExchangeManager, "ec-- id: %d [%04" PRIX16 "], inUse: %d, addr: 0x%x", (this - em->ContextPool + 1),
+                    mExchangeId, em->GetContextsInUse(), this);
+#endif
+    SYSTEM_STATS_DECREMENT(chip::System::Stats::kExchangeMgr_NumContexts);
+}
+
+bool ExchangeContext::MatchExchange(SecureSessionHandle session, const PacketHeader & packetHeader,
+                                    const PayloadHeader & payloadHeader)
 {
     // A given message is part of a particular exchange if...
     return
@@ -249,8 +305,8 @@ bool ExchangeContext::MatchExchange(const PacketHeader & packetHeader, const Pay
         // The exchange identifier of the message matches the exchange identifier of the context.
         (mExchangeId == payloadHeader.GetExchangeID())
 
-        // AND The message was received from the peer node associated with the exchange, or the peer node identifier is 'any'.
-        && ((mPeerNodeId == kAnyNodeId) || (mPeerNodeId == packetHeader.GetSourceNodeId().Value()))
+        // AND The message was received from the peer node associated with the exchange
+        && (mSecureSession == session)
 
         // AND The message was sent by an initiator and the exchange context is a responder (IsInitiator==false)
         //    OR The message was sent by a responder and the exchange context is an initiator (IsInitiator==true) (for the broadcast
@@ -293,7 +349,7 @@ void ExchangeContext::HandleResponseTimeout(System::Layer * aSystemLayer, void *
     // NOTE: we don't set mResponseExpected to false here because the response could still arrive. If the user
     // wants to never receive the response, they must close the exchange context.
 
-    ExchangeContextDelegate * delegate = ec->GetDelegate();
+    ExchangeDelegate * delegate = ec->GetDelegate();
 
     // Call the user's timeout handler.
     if (delegate != nullptr)
@@ -301,15 +357,10 @@ void ExchangeContext::HandleResponseTimeout(System::Layer * aSystemLayer, void *
 }
 
 CHIP_ERROR ExchangeContext::HandleMessage(const PacketHeader & packetHeader, const PayloadHeader & payloadHeader,
-                                          PacketBuffer * msgBuf)
-{
-    return HandleMessage(packetHeader, payloadHeader, msgBuf, nullptr);
-}
-
-CHIP_ERROR ExchangeContext::HandleMessage(const PacketHeader & packetHeader, const PayloadHeader & payloadHeader,
-                                          PacketBuffer * msgBuf, ExchangeContext::MessageReceiveFunct umhandler)
+                                          PacketBufferHandle msgBuf)
 {
     CHIP_ERROR err      = CHIP_NO_ERROR;
+    uint32_t messageId  = 0;
     uint16_t protocolId = 0;
     uint8_t messageType = 0;
 
@@ -317,45 +368,65 @@ CHIP_ERROR ExchangeContext::HandleMessage(const PacketHeader & packetHeader, con
     // guard against Close() calls(decrementing the reference
     // count) by the protocol before the CHIP Exchange
     // layer has completed its work on the ExchangeContext.
-    AddRef();
+    Retain();
 
+    messageId   = packetHeader.GetMessageId();
     protocolId  = payloadHeader.GetProtocolID();
     messageType = payloadHeader.GetMessageType();
 
-    // Since we got the response, cancel the response timer.
-    CancelResponseTimer();
-
-    // If the context was expecting a response to a previously sent message, this message
-    // is implicitly that response.
-    SetResponseExpected(false);
-
-    // Deliver the message to the app via its callback.
-    if (umhandler)
+    if (payloadHeader.IsAckMsg())
     {
-        umhandler(this, packetHeader, protocolId, messageType, msgBuf);
-        msgBuf = nullptr;
+        err = mReliableMessageContext.HandleRcvdAck(payloadHeader.GetAckId().Value());
+        SuccessOrExit(err);
     }
-    else if (mDelegate != nullptr)
+
+    if (payloadHeader.IsNeedsAck())
     {
-        mDelegate->OnMessageReceived(this, packetHeader, protocolId, messageType, msgBuf);
-        msgBuf = nullptr;
+        MessageFlags msgFlags;
+
+        // An acknowledgment needs to be sent back to the peer for this message on this exchange,
+        // Set the flag in message header indicating an ack requested by peer;
+        msgFlags.Set(MessageFlagValues::kPeerRequestedAck);
+
+        // Also set the flag in the exchange context indicating an ack requested;
+        mReliableMessageContext.SetPeerRequestedAck(true);
+
+        err = mReliableMessageContext.HandleNeedsAck(messageId, msgFlags);
+        SuccessOrExit(err);
+    }
+
+    //  The SecureChannel::StandaloneAck message type is only used for CRMP; do not pass such messages to the application layer.
+    if (payloadHeader.HasMessageType(Protocols::SecureChannel::MsgType::StandaloneAck))
+    {
+        ExitNow(err = CHIP_NO_ERROR);
     }
     else
     {
-        DefaultOnMessageReceived(this, packetHeader, protocolId, messageType, msgBuf);
+        // Since we got the response, cancel the response timer.
+        CancelResponseTimer();
+
+        // If the context was expecting a response to a previously sent message, this message
+        // is implicitly that response.
+        SetResponseExpected(false);
+
+        if (mDelegate != nullptr)
+        {
+            mDelegate->OnMessageReceived(this, packetHeader, protocolId, messageType, std::move(msgBuf));
+        }
+        else
+        {
+            DefaultOnMessageReceived(this, packetHeader, protocolId, messageType, std::move(msgBuf));
+        }
     }
 
+exit:
     // Release the reference to the ExchangeContext that was held at the beginning of this function.
     // This call should also do the needful of closing the ExchangeContext if the protocol has
     // already made a prior call to Close().
     Release();
 
-    if (msgBuf != nullptr)
-    {
-        PacketBuffer::Free(msgBuf);
-    }
-
     return err;
 }
 
+} // namespace Messaging
 } // namespace chip

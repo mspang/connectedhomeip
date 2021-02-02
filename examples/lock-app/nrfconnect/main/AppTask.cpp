@@ -25,7 +25,13 @@
 #include "Service.h"
 #include "ThreadUtil.h"
 
+#ifdef CONFIG_CHIP_NFC_COMMISSIONING
+#include "NFCWidget.h"
+#endif
+
 #include "attribute-storage.h"
+#include "gen/attribute-id.h"
+#include "gen/attribute-type.h"
 #include "gen/cluster-id.h"
 
 #include <platform/CHIPDeviceLayer.h>
@@ -51,6 +57,10 @@ static LEDWidget sStatusLED;
 static LEDWidget sLockLED;
 static LEDWidget sUnusedLED;
 static LEDWidget sUnusedLED_1;
+
+#ifdef CONFIG_CHIP_NFC_COMMISSIONING
+static NFCWidget sNFC;
+#endif
 
 static bool sIsThreadProvisioned     = false;
 static bool sIsThreadEnabled         = false;
@@ -95,6 +105,17 @@ int AppTask::Init()
     // Init ZCL Data Model and start server
     InitServer();
     PrintQRCode(chip::RendezvousInformationFlags::kBLE);
+
+#ifdef CONFIG_CHIP_NFC_COMMISSIONING
+    ret = sNFC.Init(ConnectivityMgr());
+    if (ret)
+    {
+        LOG_ERR("NFC initialization failed");
+        return ret;
+    }
+
+    PlatformMgr().AddEventHandler(AppTask::ThreadProvisioningHandler, 0);
+#endif
 
     return 0;
 }
@@ -359,9 +380,25 @@ void AppTask::StartBLEAdvertisementHandler(AppEvent * aEvent)
     if (aEvent->ButtonEvent.PinNo != BLE_ADVERTISEMENT_START_BUTTON)
         return;
 
+    if (!sNFC.IsTagEmulationStarted())
+    {
+        if (!(GetAppTask().StartNFCTag() < 0))
+        {
+            LOG_INF("Started NFC Tag emulation");
+        }
+        else
+        {
+            LOG_ERR("Starting NFC Tag failed");
+        }
+    }
+    else
+    {
+        LOG_INF("NFC Tag emulation is already started");
+    }
+
     if (!ConnectivityMgr().IsBLEAdvertisingEnabled())
     {
-        ConnectivityMgr().SetBLEAdvertisingEnabled(ConnectivityManager::kCHIPoBLEServiceMode_Enabled);
+        ConnectivityMgr().SetBLEAdvertisingEnabled(true);
         LOG_INF("Enabled BLE Advertisement");
     }
     else
@@ -369,6 +406,21 @@ void AppTask::StartBLEAdvertisementHandler(AppEvent * aEvent)
         LOG_INF("BLE Advertisement is already enabled");
     }
 }
+
+#ifdef CONFIG_CHIP_NFC_COMMISSIONING
+void AppTask::ThreadProvisioningHandler(const ChipDeviceEvent * event, intptr_t arg)
+{
+    ARG_UNUSED(arg);
+    if ((event->Type == DeviceEventType::kServiceProvisioningChange) && ConnectivityMgr().IsThreadProvisioned())
+    {
+        const int result = sNFC.StopTagEmulation();
+        if (result)
+        {
+            LOG_ERR("Stopping NFC Tag emulation failed");
+        }
+    }
+}
+#endif
 
 void AppTask::CancelTimer()
 {
@@ -381,6 +433,24 @@ void AppTask::StartTimer(uint32_t aTimeoutInMs)
     k_timer_start(&sFunctionTimer, K_MSEC(aTimeoutInMs), K_NO_WAIT);
     mFunctionTimerActive = true;
 }
+
+#ifdef CONFIG_CHIP_NFC_COMMISSIONING
+int AppTask::StartNFCTag()
+{
+    // Get QR Code and emulate its content using NFC tag
+    uint32_t setupPinCode;
+    std::string QRCode;
+
+    int result = GetQRCode(setupPinCode, QRCode, chip::RendezvousInformationFlags::kBLE);
+    VerifyOrExit(!result, ChipLogError(AppServer, "Getting QR code payload failed"));
+
+    result = sNFC.StartTagEmulation(QRCode.c_str(), QRCode.size());
+    VerifyOrExit(result >= 0, ChipLogError(AppServer, "Starting NFC Tag emulation failed"));
+
+exit:
+    return result;
+}
+#endif
 
 void AppTask::ActionInitiated(BoltLockManager::Action_t aAction, int32_t aActor)
 {

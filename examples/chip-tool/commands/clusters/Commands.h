@@ -20,8 +20,8 @@
 
 #pragma once
 
-#include "../common/ModelCommand.h"
-#include "../common/ModelCommandResponse.h"
+#include "ModelCommand.h"
+#include "ModelCommandResponse.h"
 
 #include <limits>
 
@@ -487,8 +487,14 @@ bool ReadAttributeValue(uint8_t *& message, uint16_t & messageLen)
 | * ReadAttributesResponse                                              | 0x01 |
 | * WriteAttributesResponse                                             | 0x04 |
 | * WriteAttributesNoResponse                                           | 0x05 |
+| * ConfigureReportingResponse                                          | 0x07 |
+| * ReadReportingConfigurationResponse                                  | 0x09 |
 | * DefaultResponse                                                     | 0x0B |
 | * DiscoverAttributesResponse                                          | 0x0D |
+| * WriteAttributesStructuredResponse                                   | 0x10 |
+| * DiscoverCommandsReceivedResponse                                    | 0x12 |
+| * DiscoverCommandsGeneratedResponse                                   | 0x14 |
+| * DiscoverAttributesExtendedResponse                                  | 0x16 |
 \*----------------------------------------------------------------------------*/
 
 /*
@@ -508,10 +514,13 @@ public:
         while (messageLen)
         {
             CHECK_MESSAGE_LENGTH(2);
-            ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", chip::Encoding::LittleEndian::Read16(message)); // attribId
+            uint16_t attributeId = chip::Encoding::LittleEndian::Read16(message); // attribId
+            ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", attributeId);
+
             CHECK_MESSAGE_LENGTH(1);
             uint8_t status = chip::Encoding::Read8(message); // zclStatus
             success        = CheckStatus(status);
+
             if (status == 0)
             {
                 if (!ReadAttributeValue(message, messageLen))
@@ -520,7 +529,6 @@ public:
                 }
             }
         }
-
         return success;
     }
 };
@@ -544,13 +552,14 @@ public:
             CHECK_MESSAGE_LENGTH(1);
             uint8_t status = chip::Encoding::Read8(message); // zclStatus
             success        = CheckStatus(status);
+
             if (status != 0)
             {
                 CHECK_MESSAGE_LENGTH(2);
-                ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", chip::Encoding::LittleEndian::Read16(message)); // attribId
+                uint16_t attributeId = chip::Encoding::LittleEndian::Read16(message); // attribId
+                ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", attributeId);
             }
         }
-
         return success;
     }
 };
@@ -572,13 +581,113 @@ public:
         while (messageLen)
         {
             CHECK_MESSAGE_LENGTH(2);
-            ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", chip::Encoding::LittleEndian::Read16(message)); // attribId
+            uint16_t attributeId = chip::Encoding::LittleEndian::Read16(message); // attribId
+            ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", attributeId);
+
             if (!ReadAttributeValue(message, messageLen))
             {
                 return false;
             }
         }
+        return success;
+    }
+};
 
+/*
+ * Command ConfigureReportingResponse
+ */
+class ConfigureReportingResponse : public ModelCommandResponse
+{
+public:
+    ConfigureReportingResponse() : ModelCommandResponse(0x07) {}
+
+    bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
+    {
+        bool success = true;
+        ChipLogProgress(chipTool, "ConfigureReportingResponse (0x07):");
+
+        // struct configureReportingResponseRecord[]
+        while (messageLen)
+        {
+            CHECK_MESSAGE_LENGTH(1);
+            uint8_t status = chip::Encoding::Read8(message); // zclStatus
+            success        = CheckStatus(status);
+
+            if (status != 0)
+            {
+                CHECK_MESSAGE_LENGTH(1);
+                uint8_t direction = chip::Encoding::Read8(message); // reportingRole
+                ChipLogProgress(chipTool, "  %s: 0x%02x", "direction", direction);
+            }
+
+            if (status != 0)
+            {
+                CHECK_MESSAGE_LENGTH(2);
+                uint16_t attributeId = chip::Encoding::LittleEndian::Read16(message); // attribId
+                ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", attributeId);
+            }
+        }
+        return success;
+    }
+};
+
+/*
+ * Command ReadReportingConfigurationResponse
+ */
+class ReadReportingConfigurationResponse : public ModelCommandResponse
+{
+public:
+    ReadReportingConfigurationResponse() : ModelCommandResponse(0x09) {}
+
+    bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
+    {
+        bool success = true;
+        ChipLogProgress(chipTool, "ReadReportingConfigurationResponse (0x09):");
+
+        // struct readReportingConfigurationResponseRecord[]
+        while (messageLen)
+        {
+            CHECK_MESSAGE_LENGTH(1);
+            uint8_t direction = chip::Encoding::Read8(message); // reportingRole
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "direction", direction);
+
+            CHECK_MESSAGE_LENGTH(2);
+            uint16_t attributeId = chip::Encoding::LittleEndian::Read16(message); // attribId
+            ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", attributeId);
+
+            if (direction == 0)
+            {
+                CHECK_MESSAGE_LENGTH(1);
+                uint8_t attributeType = chip::Encoding::Read8(message); // zclType
+                ChipLogProgress(chipTool, "  %s: 0x%02x", "attributeType", attributeType);
+            }
+
+            if (direction == 0)
+            {
+                CHECK_MESSAGE_LENGTH(2);
+                uint16_t minimumReportingInterval = chip::Encoding::LittleEndian::Read16(message); // uint16
+                ChipLogProgress(chipTool, "  %s: 0x%04x", "minimumReportingInterval", minimumReportingInterval);
+            }
+
+            if (direction == 0)
+            {
+                CHECK_MESSAGE_LENGTH(2);
+                uint16_t maximumReportingInterval = chip::Encoding::LittleEndian::Read16(message); // uint16
+                ChipLogProgress(chipTool, "  %s: 0x%04x", "maximumReportingInterval", maximumReportingInterval);
+            }
+
+            if (direction == 0)
+            {
+                // FIXME: unk is not supported yet.
+            }
+
+            if (direction == 1)
+            {
+                CHECK_MESSAGE_LENGTH(2);
+                uint16_t timeout = chip::Encoding::LittleEndian::Read16(message); // uint16
+                ChipLogProgress(chipTool, "  %s: 0x%04x", "timeout", timeout);
+            }
+        }
         return success;
     }
 };
@@ -597,7 +706,9 @@ public:
         ChipLogProgress(chipTool, "DefaultResponse (0x0B):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "commandId", chip::Encoding::Read8(message)); // uint8
+        uint8_t commandId = chip::Encoding::Read8(message); // uint8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "commandId", commandId);
+
         CHECK_MESSAGE_LENGTH(1);
         uint8_t status = chip::Encoding::Read8(message); // zclStatus
         success        = CheckStatus(status);
@@ -620,16 +731,146 @@ public:
         ChipLogProgress(chipTool, "DiscoverAttributesResponse (0x0D):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "discoveryComplete", chip::Encoding::Read8(message)); // bool
+        bool discoveryComplete = chip::Encoding::Read8(message); // bool
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "discoveryComplete", discoveryComplete);
+
         // struct discoverAttributesResponseRecord[]
         while (messageLen)
         {
             CHECK_MESSAGE_LENGTH(2);
-            ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", chip::Encoding::LittleEndian::Read16(message)); // attribId
-            CHECK_MESSAGE_LENGTH(1);
-            ChipLogProgress(chipTool, "  %s: 0x%02x", "attributeType", chip::Encoding::Read8(message)); // zclType
-        }
+            uint16_t attributeId = chip::Encoding::LittleEndian::Read16(message); // attribId
+            ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", attributeId);
 
+            CHECK_MESSAGE_LENGTH(1);
+            uint8_t attributeType = chip::Encoding::Read8(message); // zclType
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "attributeType", attributeType);
+        }
+        return success;
+    }
+};
+
+/*
+ * Command WriteAttributesStructuredResponse
+ */
+class WriteAttributesStructuredResponse : public ModelCommandResponse
+{
+public:
+    WriteAttributesStructuredResponse() : ModelCommandResponse(0x10) {}
+
+    bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
+    {
+        bool success = true;
+        ChipLogProgress(chipTool, "WriteAttributesStructuredResponse (0x10):");
+
+        // struct writeStructuredResponseRecord[]
+        while (messageLen)
+        {
+            CHECK_MESSAGE_LENGTH(1);
+            uint8_t status = chip::Encoding::Read8(message); // zclStatus
+            success        = CheckStatus(status);
+
+            if (status != 0)
+            {
+                CHECK_MESSAGE_LENGTH(2);
+                uint16_t attributeId = chip::Encoding::LittleEndian::Read16(message); // attribId
+                ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", attributeId);
+            }
+
+            if (status != 0)
+            {
+                CHECK_MESSAGE_LENGTH(2);
+                uint16_t selector = chip::Encoding::LittleEndian::Read16(message); // uint16
+                ChipLogProgress(chipTool, "  %s: 0x%04x", "selector", selector);
+            }
+        }
+        return success;
+    }
+};
+
+/*
+ * Command DiscoverCommandsReceivedResponse
+ */
+class DiscoverCommandsReceivedResponse : public ModelCommandResponse
+{
+public:
+    DiscoverCommandsReceivedResponse() : ModelCommandResponse(0x12) {}
+
+    bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
+    {
+        bool success = true;
+        ChipLogProgress(chipTool, "DiscoverCommandsReceivedResponse (0x12):");
+
+        CHECK_MESSAGE_LENGTH(1);
+        bool discoveryComplete = chip::Encoding::Read8(message); // bool
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "discoveryComplete", discoveryComplete);
+
+        // uint8_t uint8[]
+        while (messageLen)
+        {
+            CHECK_MESSAGE_LENGTH(1);
+            uint8_t commandId = chip::Encoding::Read8(message); // uint8
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "commandId", commandId);
+        }
+        return success;
+    }
+};
+
+/*
+ * Command DiscoverCommandsGeneratedResponse
+ */
+class DiscoverCommandsGeneratedResponse : public ModelCommandResponse
+{
+public:
+    DiscoverCommandsGeneratedResponse() : ModelCommandResponse(0x14) {}
+
+    bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
+    {
+        bool success = true;
+        ChipLogProgress(chipTool, "DiscoverCommandsGeneratedResponse (0x14):");
+
+        CHECK_MESSAGE_LENGTH(1);
+        bool discoveryComplete = chip::Encoding::Read8(message); // bool
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "discoveryComplete", discoveryComplete);
+
+        // uint8_t uint8[]
+        while (messageLen)
+        {
+            CHECK_MESSAGE_LENGTH(1);
+            uint8_t commandId = chip::Encoding::Read8(message); // uint8
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "commandId", commandId);
+        }
+        return success;
+    }
+};
+
+/*
+ * Command DiscoverAttributesExtendedResponse
+ */
+class DiscoverAttributesExtendedResponse : public ModelCommandResponse
+{
+public:
+    DiscoverAttributesExtendedResponse() : ModelCommandResponse(0x16) {}
+
+    bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
+    {
+        bool success = true;
+        ChipLogProgress(chipTool, "DiscoverAttributesExtendedResponse (0x16):");
+
+        CHECK_MESSAGE_LENGTH(1);
+        bool discoveryComplete = chip::Encoding::Read8(message); // bool
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "discoveryComplete", discoveryComplete);
+
+        // struct discoverAttributesExtendedResponseRecord[]
+        while (messageLen)
+        {
+            CHECK_MESSAGE_LENGTH(2);
+            uint16_t attributeId = chip::Encoding::LittleEndian::Read16(message); // attribId
+            ChipLogProgress(chipTool, "  %s: 0x%04x", "attributeId", attributeId);
+
+            CHECK_MESSAGE_LENGTH(1);
+            uint8_t accessControl = chip::Encoding::Read8(message); // bitmap8
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "accessControl", accessControl);
+        }
         return success;
     }
 };
@@ -642,6 +883,7 @@ public:
 | ColorControl                                                        | 0x0300 |
 | DoorLock                                                            | 0x0101 |
 | Groups                                                              | 0x0004 |
+| IasZone                                                             | 0x0500 |
 | Identify                                                            | 0x0003 |
 | Level                                                               | 0x0008 |
 | OnOff                                                               | 0x0006 |
@@ -654,6 +896,7 @@ constexpr uint16_t kBasicClusterId           = 0x0000;
 constexpr uint16_t kColorControlClusterId    = 0x0300;
 constexpr uint16_t kDoorLockClusterId        = 0x0101;
 constexpr uint16_t kGroupsClusterId          = 0x0004;
+constexpr uint16_t kIasZoneClusterId         = 0x0500;
 constexpr uint16_t kIdentifyClusterId        = 0x0003;
 constexpr uint16_t kLevelClusterId           = 0x0008;
 constexpr uint16_t kOnOffClusterId           = 0x0006;
@@ -683,15 +926,15 @@ constexpr uint16_t kTempMeasurementClusterId = 0x0402;
 class BarrierControlGoToPercent : public ModelCommand
 {
 public:
-    BarrierControlGoToPercent() : ModelCommand("go-to-percent", kBarrierControlClusterId, 0x00)
+    BarrierControlGoToPercent() : ModelCommand("barrier-control-go-to-percent", kBarrierControlClusterId, 0x00)
     {
         AddArgument("percentOpen", 0, UINT8_MAX, &mPercentOpen);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeBarrierControlClusterGoToPercentCommand(buffer->Start(), bufferSize, endPointId, mPercentOpen);
+        return encodeBarrierControlClusterBarrierControlGoToPercentCommand(endPointId, mPercentOpen);
     }
 
     // Global Response: DefaultResponse
@@ -711,17 +954,38 @@ private:
 class BarrierControlStop : public ModelCommand
 {
 public:
-    BarrierControlStop() : ModelCommand("stop", kBarrierControlClusterId, 0x01) { ModelCommand::AddArguments(); }
+    BarrierControlStop() : ModelCommand("barrier-control-stop", kBarrierControlClusterId, 0x01) { ModelCommand::AddArguments(); }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeBarrierControlClusterStopCommand(buffer->Start(), bufferSize, endPointId);
+        return encodeBarrierControlClusterBarrierControlStopCommand(endPointId);
     }
 
     // Global Response: DefaultResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
         DefaultResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
+ * Discover attributes
+ */
+class DiscoverBarrierControlAttributes : public ModelCommand
+{
+public:
+    DiscoverBarrierControlAttributes() : ModelCommand("discover", kBarrierControlClusterId, 0x0c) { ModelCommand::AddArguments(); }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeBarrierControlClusterDiscoverAttributes(endPointId);
+    }
+
+    // Global Response: DiscoverAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        DiscoverAttributesResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 };
@@ -734,13 +998,13 @@ class ReadBarrierControlMovingState : public ModelCommand
 public:
     ReadBarrierControlMovingState() : ModelCommand("read", kBarrierControlClusterId, 0x00)
     {
-        AddArgument("attr-name", "moving-state");
+        AddArgument("attr-name", "barrier-moving-state");
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeBarrierControlClusterReadMovingStateAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeBarrierControlClusterReadBarrierMovingStateAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -759,13 +1023,13 @@ class ReadBarrierControlSafetyStatus : public ModelCommand
 public:
     ReadBarrierControlSafetyStatus() : ModelCommand("read", kBarrierControlClusterId, 0x00)
     {
-        AddArgument("attr-name", "safety-status");
+        AddArgument("attr-name", "barrier-safety-status");
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeBarrierControlClusterReadSafetyStatusAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeBarrierControlClusterReadBarrierSafetyStatusAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -784,13 +1048,13 @@ class ReadBarrierControlCapabilities : public ModelCommand
 public:
     ReadBarrierControlCapabilities() : ModelCommand("read", kBarrierControlClusterId, 0x00)
     {
-        AddArgument("attr-name", "capabilities");
+        AddArgument("attr-name", "barrier-capabilities");
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeBarrierControlClusterReadCapabilitiesAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeBarrierControlClusterReadBarrierCapabilitiesAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -813,9 +1077,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeBarrierControlClusterReadBarrierPositionAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeBarrierControlClusterReadBarrierPositionAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -834,9 +1098,10 @@ public:
 |------------------------------------------------------------------------------|
 | Commands:                                                           |        |
 | * ResetToFactoryDefaults                                            |   0x00 |
+| * MfgSpecificPing                                                   |   0x00 |
 |------------------------------------------------------------------------------|
 | Attributes:                                                         |        |
-| * ZCLVersion                                                        | 0x0000 |
+| * ZclVersion                                                        | 0x0000 |
 | * PowerSource                                                       | 0x0007 |
 \*----------------------------------------------------------------------------*/
 
@@ -851,9 +1116,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeBasicClusterResetToFactoryDefaultsCommand(buffer->Start(), bufferSize, endPointId);
+        return encodeBasicClusterResetToFactoryDefaultsCommand(endPointId);
     }
 
     // Global Response: DefaultResponse
@@ -865,21 +1130,54 @@ public:
 };
 
 /*
- * Attribute ZCLVersion
+ * Command MfgSpecificPing
  */
-class ReadBasicZCLVersion : public ModelCommand
+class BasicMfgSpecificPing : public ModelCommand
 {
 public:
-    ReadBasicZCLVersion() : ModelCommand("read", kBasicClusterId, 0x00)
+    BasicMfgSpecificPing() : ModelCommand("ping", kBasicClusterId, 0x00) { ModelCommand::AddArguments(); }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeBasicClusterMfgSpecificPingCommand(endPointId); }
+
+    // Global Response: DefaultResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        AddArgument("attr-name", "zclversion");
+        DefaultResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
+ * Discover attributes
+ */
+class DiscoverBasicAttributes : public ModelCommand
+{
+public:
+    DiscoverBasicAttributes() : ModelCommand("discover", kBasicClusterId, 0x0c) { ModelCommand::AddArguments(); }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeBasicClusterDiscoverAttributes(endPointId); }
+
+    // Global Response: DiscoverAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        DiscoverAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
+ * Attribute ZclVersion
+ */
+class ReadBasicZclVersion : public ModelCommand
+{
+public:
+    ReadBasicZclVersion() : ModelCommand("read", kBasicClusterId, 0x00)
+    {
+        AddArgument("attr-name", "zcl-version");
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeBasicClusterReadZCLVersionAttribute(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeBasicClusterReadZclVersionAttribute(endPointId); }
 
     // Global Response: ReadAttributesResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -901,10 +1199,7 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeBasicClusterReadPowerSourceAttribute(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeBasicClusterReadPowerSourceAttribute(endPointId); }
 
     // Global Response: ReadAttributesResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -942,9 +1237,8 @@ public:
 | * RemainingTime                                                     | 0x0002 |
 | * CurrentX                                                          | 0x0003 |
 | * CurrentY                                                          | 0x0004 |
-| * ColorTemperatureMireds                                            | 0x0007 |
+| * ColorTemperature                                                  | 0x0007 |
 | * ColorMode                                                         | 0x0008 |
-| * Options                                                           | 0x000F |
 | * NumberOfPrimaries                                                 | 0x0010 |
 | * Primary1X                                                         | 0x0011 |
 | * Primary1Y                                                         | 0x0012 |
@@ -969,11 +1263,9 @@ public:
 | * ColorLoopActive                                                   | 0x4002 |
 | * ColorLoopDirection                                                | 0x4003 |
 | * ColorLoopTime                                                     | 0x4004 |
-| * ColorLoopStartEnhancedHue                                         | 0x4005 |
-| * ColorLoopStoredEnhancedHue                                        | 0x4006 |
 | * ColorCapabilities                                                 | 0x400A |
-| * ColorTempPhysicalMinMireds                                        | 0x400B |
-| * ColorTempPhysicalMaxMireds                                        | 0x400C |
+| * ColorTempPhysicalMin                                              | 0x400B |
+| * ColorTempPhysicalMax                                              | 0x400C |
 | * CoupleColorTempToLevelMinMireds                                   | 0x400D |
 | * StartUpColorTemperatureMireds                                     | 0x4010 |
 \*----------------------------------------------------------------------------*/
@@ -993,10 +1285,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterMoveColorCommand(buffer->Start(), bufferSize, endPointId, mRateX, mRateY, mOptionsMask,
-                                                         mOptionsOverride);
+        return encodeColorControlClusterMoveColorCommand(endPointId, mRateX, mRateY, mOptionsMask, mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1023,18 +1314,17 @@ public:
     {
         AddArgument("moveMode", 0, UINT8_MAX, &mMoveMode);
         AddArgument("rate", 0, UINT16_MAX, &mRate);
-        AddArgument("colorTemperatureMinimumMireds", 0, UINT16_MAX, &mColorTemperatureMinimumMireds);
-        AddArgument("colorTemperatureMaximumMireds", 0, UINT16_MAX, &mColorTemperatureMaximumMireds);
+        AddArgument("colorTemperatureMinimum", 0, UINT16_MAX, &mColorTemperatureMinimum);
+        AddArgument("colorTemperatureMaximum", 0, UINT16_MAX, &mColorTemperatureMaximum);
         AddArgument("optionsMask", 0, UINT8_MAX, &mOptionsMask);
         AddArgument("optionsOverride", 0, UINT8_MAX, &mOptionsOverride);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterMoveColorTemperatureCommand(buffer->Start(), bufferSize, endPointId, mMoveMode, mRate,
-                                                                    mColorTemperatureMinimumMireds, mColorTemperatureMaximumMireds,
-                                                                    mOptionsMask, mOptionsOverride);
+        return encodeColorControlClusterMoveColorTemperatureCommand(endPointId, mMoveMode, mRate, mColorTemperatureMinimum,
+                                                                    mColorTemperatureMaximum, mOptionsMask, mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1047,8 +1337,8 @@ public:
 private:
     uint8_t mMoveMode;
     uint16_t mRate;
-    uint16_t mColorTemperatureMinimumMireds;
-    uint16_t mColorTemperatureMaximumMireds;
+    uint16_t mColorTemperatureMinimum;
+    uint16_t mColorTemperatureMaximum;
     uint8_t mOptionsMask;
     uint8_t mOptionsOverride;
 };
@@ -1068,10 +1358,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterMoveHueCommand(buffer->Start(), bufferSize, endPointId, mMoveMode, mRate, mOptionsMask,
-                                                       mOptionsOverride);
+        return encodeColorControlClusterMoveHueCommand(endPointId, mMoveMode, mRate, mOptionsMask, mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1103,10 +1392,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterMoveSaturationCommand(buffer->Start(), bufferSize, endPointId, mMoveMode, mRate,
-                                                              mOptionsMask, mOptionsOverride);
+        return encodeColorControlClusterMoveSaturationCommand(endPointId, mMoveMode, mRate, mOptionsMask, mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1139,10 +1427,10 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterMoveToColorCommand(buffer->Start(), bufferSize, endPointId, mColorX, mColorY,
-                                                           mTransitionTime, mOptionsMask, mOptionsOverride);
+        return encodeColorControlClusterMoveToColorCommand(endPointId, mColorX, mColorY, mTransitionTime, mOptionsMask,
+                                                           mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1168,17 +1456,17 @@ class ColorControlMoveToColorTemperature : public ModelCommand
 public:
     ColorControlMoveToColorTemperature() : ModelCommand("move-to-color-temperature", kColorControlClusterId, 0x0A)
     {
-        AddArgument("colorTemperatureMireds", 0, UINT16_MAX, &mColorTemperatureMireds);
+        AddArgument("colorTemperature", 0, UINT16_MAX, &mColorTemperature);
         AddArgument("transitionTime", 0, UINT16_MAX, &mTransitionTime);
         AddArgument("optionsMask", 0, UINT8_MAX, &mOptionsMask);
         AddArgument("optionsOverride", 0, UINT8_MAX, &mOptionsOverride);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterMoveToColorTemperatureCommand(
-            buffer->Start(), bufferSize, endPointId, mColorTemperatureMireds, mTransitionTime, mOptionsMask, mOptionsOverride);
+        return encodeColorControlClusterMoveToColorTemperatureCommand(endPointId, mColorTemperature, mTransitionTime, mOptionsMask,
+                                                                      mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1189,7 +1477,7 @@ public:
     }
 
 private:
-    uint16_t mColorTemperatureMireds;
+    uint16_t mColorTemperature;
     uint16_t mTransitionTime;
     uint8_t mOptionsMask;
     uint8_t mOptionsOverride;
@@ -1211,10 +1499,10 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterMoveToHueCommand(buffer->Start(), bufferSize, endPointId, mHue, mDirection, mTransitionTime,
-                                                         mOptionsMask, mOptionsOverride);
+        return encodeColorControlClusterMoveToHueCommand(endPointId, mHue, mDirection, mTransitionTime, mOptionsMask,
+                                                         mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1248,10 +1536,10 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterMoveToHueAndSaturationCommand(buffer->Start(), bufferSize, endPointId, mHue, mSaturation,
-                                                                      mTransitionTime, mOptionsMask, mOptionsOverride);
+        return encodeColorControlClusterMoveToHueAndSaturationCommand(endPointId, mHue, mSaturation, mTransitionTime, mOptionsMask,
+                                                                      mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1284,10 +1572,10 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterMoveToSaturationCommand(buffer->Start(), bufferSize, endPointId, mSaturation,
-                                                                mTransitionTime, mOptionsMask, mOptionsOverride);
+        return encodeColorControlClusterMoveToSaturationCommand(endPointId, mSaturation, mTransitionTime, mOptionsMask,
+                                                                mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1320,10 +1608,10 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterStepColorCommand(buffer->Start(), bufferSize, endPointId, mStepX, mStepY, mTransitionTime,
-                                                         mOptionsMask, mOptionsOverride);
+        return encodeColorControlClusterStepColorCommand(endPointId, mStepX, mStepY, mTransitionTime, mOptionsMask,
+                                                         mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1352,18 +1640,18 @@ public:
         AddArgument("stepMode", 0, UINT8_MAX, &mStepMode);
         AddArgument("stepSize", 0, UINT16_MAX, &mStepSize);
         AddArgument("transitionTime", 0, UINT16_MAX, &mTransitionTime);
-        AddArgument("colorTemperatureMinimumMireds", 0, UINT16_MAX, &mColorTemperatureMinimumMireds);
-        AddArgument("colorTemperatureMaximumMireds", 0, UINT16_MAX, &mColorTemperatureMaximumMireds);
+        AddArgument("colorTemperatureMinimum", 0, UINT16_MAX, &mColorTemperatureMinimum);
+        AddArgument("colorTemperatureMaximum", 0, UINT16_MAX, &mColorTemperatureMaximum);
         AddArgument("optionsMask", 0, UINT8_MAX, &mOptionsMask);
         AddArgument("optionsOverride", 0, UINT8_MAX, &mOptionsOverride);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterStepColorTemperatureCommand(buffer->Start(), bufferSize, endPointId, mStepMode, mStepSize,
-                                                                    mTransitionTime, mColorTemperatureMinimumMireds,
-                                                                    mColorTemperatureMaximumMireds, mOptionsMask, mOptionsOverride);
+        return encodeColorControlClusterStepColorTemperatureCommand(endPointId, mStepMode, mStepSize, mTransitionTime,
+                                                                    mColorTemperatureMinimum, mColorTemperatureMaximum,
+                                                                    mOptionsMask, mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1377,8 +1665,8 @@ private:
     uint8_t mStepMode;
     uint16_t mStepSize;
     uint16_t mTransitionTime;
-    uint16_t mColorTemperatureMinimumMireds;
-    uint16_t mColorTemperatureMaximumMireds;
+    uint16_t mColorTemperatureMinimum;
+    uint16_t mColorTemperatureMaximum;
     uint8_t mOptionsMask;
     uint8_t mOptionsOverride;
 };
@@ -1399,10 +1687,10 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterStepHueCommand(buffer->Start(), bufferSize, endPointId, mStepMode, mStepSize,
-                                                       mTransitionTime, mOptionsMask, mOptionsOverride);
+        return encodeColorControlClusterStepHueCommand(endPointId, mStepMode, mStepSize, mTransitionTime, mOptionsMask,
+                                                       mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1436,10 +1724,10 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterStepSaturationCommand(buffer->Start(), bufferSize, endPointId, mStepMode, mStepSize,
-                                                              mTransitionTime, mOptionsMask, mOptionsOverride);
+        return encodeColorControlClusterStepSaturationCommand(endPointId, mStepMode, mStepSize, mTransitionTime, mOptionsMask,
+                                                              mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1470,10 +1758,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterStopMoveStepCommand(buffer->Start(), bufferSize, endPointId, mOptionsMask,
-                                                            mOptionsOverride);
+        return encodeColorControlClusterStopMoveStepCommand(endPointId, mOptionsMask, mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -1489,6 +1776,27 @@ private:
 };
 
 /*
+ * Discover attributes
+ */
+class DiscoverColorControlAttributes : public ModelCommand
+{
+public:
+    DiscoverColorControlAttributes() : ModelCommand("discover", kColorControlClusterId, 0x0c) { ModelCommand::AddArguments(); }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeColorControlClusterDiscoverAttributes(endPointId);
+    }
+
+    // Global Response: DiscoverAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        DiscoverAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
  * Attribute CurrentHue
  */
 class ReadColorControlCurrentHue : public ModelCommand
@@ -1500,9 +1808,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadCurrentHueAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadCurrentHueAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1511,6 +1819,36 @@ public:
         ReadAttributesResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
+};
+
+class ReportColorControlCurrentHue : public ModelCommand
+{
+public:
+    ReportColorControlCurrentHue() : ModelCommand("report", kColorControlClusterId, 0x06)
+    {
+        AddArgument("attr-name", "current-hue");
+        AddArgument("min-interval", 0, UINT16_MAX, &mMinInterval);
+        AddArgument("max-interval", 0, UINT16_MAX, &mMaxInterval);
+        AddArgument("change", 0, UINT8_MAX, &mChange);
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeColorControlClusterReportCurrentHueAttribute(endPointId, mMinInterval, mMaxInterval, mChange);
+    }
+
+    // Global Response: ConfigureReportingResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ConfigureReportingResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+
+private:
+    uint16_t mMinInterval;
+    uint16_t mMaxInterval;
+    uint8_t mChange;
 };
 
 /*
@@ -1525,9 +1863,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadCurrentSaturationAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadCurrentSaturationAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1536,6 +1874,36 @@ public:
         ReadAttributesResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
+};
+
+class ReportColorControlCurrentSaturation : public ModelCommand
+{
+public:
+    ReportColorControlCurrentSaturation() : ModelCommand("report", kColorControlClusterId, 0x06)
+    {
+        AddArgument("attr-name", "current-saturation");
+        AddArgument("min-interval", 0, UINT16_MAX, &mMinInterval);
+        AddArgument("max-interval", 0, UINT16_MAX, &mMaxInterval);
+        AddArgument("change", 0, UINT8_MAX, &mChange);
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeColorControlClusterReportCurrentSaturationAttribute(endPointId, mMinInterval, mMaxInterval, mChange);
+    }
+
+    // Global Response: ConfigureReportingResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ConfigureReportingResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+
+private:
+    uint16_t mMinInterval;
+    uint16_t mMaxInterval;
+    uint8_t mChange;
 };
 
 /*
@@ -1550,9 +1918,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadRemainingTimeAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadRemainingTimeAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1571,13 +1939,13 @@ class ReadColorControlCurrentX : public ModelCommand
 public:
     ReadColorControlCurrentX() : ModelCommand("read", kColorControlClusterId, 0x00)
     {
-        AddArgument("attr-name", "current-x");
+        AddArgument("attr-name", "currentx");
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadCurrentXAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadCurrentXAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1586,6 +1954,36 @@ public:
         ReadAttributesResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
+};
+
+class ReportColorControlCurrentX : public ModelCommand
+{
+public:
+    ReportColorControlCurrentX() : ModelCommand("report", kColorControlClusterId, 0x06)
+    {
+        AddArgument("attr-name", "currentx");
+        AddArgument("min-interval", 0, UINT16_MAX, &mMinInterval);
+        AddArgument("max-interval", 0, UINT16_MAX, &mMaxInterval);
+        AddArgument("change", 0, UINT16_MAX, &mChange);
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeColorControlClusterReportCurrentXAttribute(endPointId, mMinInterval, mMaxInterval, mChange);
+    }
+
+    // Global Response: ConfigureReportingResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ConfigureReportingResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+
+private:
+    uint16_t mMinInterval;
+    uint16_t mMaxInterval;
+    uint16_t mChange;
 };
 
 /*
@@ -1596,13 +1994,13 @@ class ReadColorControlCurrentY : public ModelCommand
 public:
     ReadColorControlCurrentY() : ModelCommand("read", kColorControlClusterId, 0x00)
     {
-        AddArgument("attr-name", "current-y");
+        AddArgument("attr-name", "currenty");
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadCurrentYAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadCurrentYAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1613,21 +2011,51 @@ public:
     }
 };
 
-/*
- * Attribute ColorTemperatureMireds
- */
-class ReadColorControlColorTemperatureMireds : public ModelCommand
+class ReportColorControlCurrentY : public ModelCommand
 {
 public:
-    ReadColorControlColorTemperatureMireds() : ModelCommand("read", kColorControlClusterId, 0x00)
+    ReportColorControlCurrentY() : ModelCommand("report", kColorControlClusterId, 0x06)
+    {
+        AddArgument("attr-name", "currenty");
+        AddArgument("min-interval", 0, UINT16_MAX, &mMinInterval);
+        AddArgument("max-interval", 0, UINT16_MAX, &mMaxInterval);
+        AddArgument("change", 0, UINT16_MAX, &mChange);
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeColorControlClusterReportCurrentYAttribute(endPointId, mMinInterval, mMaxInterval, mChange);
+    }
+
+    // Global Response: ConfigureReportingResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ConfigureReportingResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+
+private:
+    uint16_t mMinInterval;
+    uint16_t mMaxInterval;
+    uint16_t mChange;
+};
+
+/*
+ * Attribute ColorTemperature
+ */
+class ReadColorControlColorTemperature : public ModelCommand
+{
+public:
+    ReadColorControlColorTemperature() : ModelCommand("read", kColorControlClusterId, 0x00)
     {
         AddArgument("attr-name", "color-temperature-mireds");
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadColorTemperatureMiredsAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadColorTemperatureAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1636,6 +2064,36 @@ public:
         ReadAttributesResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
+};
+
+class ReportColorControlColorTemperature : public ModelCommand
+{
+public:
+    ReportColorControlColorTemperature() : ModelCommand("report", kColorControlClusterId, 0x06)
+    {
+        AddArgument("attr-name", "color-temperature-mireds");
+        AddArgument("min-interval", 0, UINT16_MAX, &mMinInterval);
+        AddArgument("max-interval", 0, UINT16_MAX, &mMaxInterval);
+        AddArgument("change", 0, UINT16_MAX, &mChange);
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeColorControlClusterReportColorTemperatureAttribute(endPointId, mMinInterval, mMaxInterval, mChange);
+    }
+
+    // Global Response: ConfigureReportingResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ConfigureReportingResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+
+private:
+    uint16_t mMinInterval;
+    uint16_t mMaxInterval;
+    uint16_t mChange;
 };
 
 /*
@@ -1650,34 +2108,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadColorModeAttribute(buffer->Start(), bufferSize, endPointId);
-    }
-
-    // Global Response: ReadAttributesResponse
-    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
-    {
-        ReadAttributesResponse response;
-        return response.HandleCommandResponse(commandId, message, messageLen);
-    }
-};
-
-/*
- * Attribute Options
- */
-class ReadColorControlOptions : public ModelCommand
-{
-public:
-    ReadColorControlOptions() : ModelCommand("read", kColorControlClusterId, 0x00)
-    {
-        AddArgument("attr-name", "options");
-        ModelCommand::AddArguments();
-    }
-
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeColorControlClusterReadOptionsAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadColorModeAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1700,9 +2133,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadNumberOfPrimariesAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadNumberOfPrimariesAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1725,9 +2158,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary1XAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary1XAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1750,9 +2183,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary1YAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary1YAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1775,9 +2208,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary1IntensityAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary1IntensityAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1800,9 +2233,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary2XAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary2XAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1825,9 +2258,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary2YAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary2YAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1850,9 +2283,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary2IntensityAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary2IntensityAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1875,9 +2308,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary3XAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary3XAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1900,9 +2333,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary3YAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary3YAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1925,9 +2358,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary3IntensityAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary3IntensityAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1950,9 +2383,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary4XAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary4XAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -1975,9 +2408,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary4YAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary4YAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2000,9 +2433,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary4IntensityAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary4IntensityAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2025,9 +2458,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary5XAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary5XAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2050,9 +2483,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary5YAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary5YAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2075,9 +2508,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary5IntensityAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary5IntensityAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2100,9 +2533,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary6XAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary6XAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2125,9 +2558,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary6YAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary6YAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2150,9 +2583,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadPrimary6IntensityAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadPrimary6IntensityAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2175,9 +2608,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadEnhancedCurrentHueAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadEnhancedCurrentHueAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2200,9 +2633,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadEnhancedColorModeAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadEnhancedColorModeAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2225,9 +2658,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadColorLoopActiveAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadColorLoopActiveAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2250,9 +2683,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadColorLoopDirectionAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadColorLoopDirectionAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2275,59 +2708,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadColorLoopTimeAttribute(buffer->Start(), bufferSize, endPointId);
-    }
-
-    // Global Response: ReadAttributesResponse
-    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
-    {
-        ReadAttributesResponse response;
-        return response.HandleCommandResponse(commandId, message, messageLen);
-    }
-};
-
-/*
- * Attribute ColorLoopStartEnhancedHue
- */
-class ReadColorControlColorLoopStartEnhancedHue : public ModelCommand
-{
-public:
-    ReadColorControlColorLoopStartEnhancedHue() : ModelCommand("read", kColorControlClusterId, 0x00)
-    {
-        AddArgument("attr-name", "color-loop-start-enhanced-hue");
-        ModelCommand::AddArguments();
-    }
-
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeColorControlClusterReadColorLoopStartEnhancedHueAttribute(buffer->Start(), bufferSize, endPointId);
-    }
-
-    // Global Response: ReadAttributesResponse
-    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
-    {
-        ReadAttributesResponse response;
-        return response.HandleCommandResponse(commandId, message, messageLen);
-    }
-};
-
-/*
- * Attribute ColorLoopStoredEnhancedHue
- */
-class ReadColorControlColorLoopStoredEnhancedHue : public ModelCommand
-{
-public:
-    ReadColorControlColorLoopStoredEnhancedHue() : ModelCommand("read", kColorControlClusterId, 0x00)
-    {
-        AddArgument("attr-name", "color-loop-stored-enhanced-hue");
-        ModelCommand::AddArguments();
-    }
-
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeColorControlClusterReadColorLoopStoredEnhancedHueAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadColorLoopTimeAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2350,9 +2733,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadColorCapabilitiesAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadColorCapabilitiesAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2364,20 +2747,20 @@ public:
 };
 
 /*
- * Attribute ColorTempPhysicalMinMireds
+ * Attribute ColorTempPhysicalMin
  */
-class ReadColorControlColorTempPhysicalMinMireds : public ModelCommand
+class ReadColorControlColorTempPhysicalMin : public ModelCommand
 {
 public:
-    ReadColorControlColorTempPhysicalMinMireds() : ModelCommand("read", kColorControlClusterId, 0x00)
+    ReadColorControlColorTempPhysicalMin() : ModelCommand("read", kColorControlClusterId, 0x00)
     {
-        AddArgument("attr-name", "color-temp-physical-min-mireds");
+        AddArgument("attr-name", "color-temp-physical-min");
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadColorTempPhysicalMinMiredsAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadColorTempPhysicalMinAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2389,20 +2772,20 @@ public:
 };
 
 /*
- * Attribute ColorTempPhysicalMaxMireds
+ * Attribute ColorTempPhysicalMax
  */
-class ReadColorControlColorTempPhysicalMaxMireds : public ModelCommand
+class ReadColorControlColorTempPhysicalMax : public ModelCommand
 {
 public:
-    ReadColorControlColorTempPhysicalMaxMireds() : ModelCommand("read", kColorControlClusterId, 0x00)
+    ReadColorControlColorTempPhysicalMax() : ModelCommand("read", kColorControlClusterId, 0x00)
     {
-        AddArgument("attr-name", "color-temp-physical-max-mireds");
+        AddArgument("attr-name", "color-temp-physical-max");
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadColorTempPhysicalMaxMiredsAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadColorTempPhysicalMaxAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2425,9 +2808,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadCoupleColorTempToLevelMinMiredsAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadCoupleColorTempToLevelMinMiredsAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2450,9 +2833,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeColorControlClusterReadStartUpColorTemperatureMiredsAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeColorControlClusterReadStartUpColorTemperatureMiredsAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -2467,51 +2850,51 @@ public:
 | Cluster DoorLock                                                    | 0x0101 |
 |------------------------------------------------------------------------------|
 | Responses:                                                          |        |
-| * ClearAllPINCodesResponse                                          |   0x08 |
-| * ClearAllRFIDCodesResponse                                         |   0x19 |
+| * ClearAllPinsResponse                                              |   0x08 |
+| * ClearAllRfidsResponse                                             |   0x19 |
 | * ClearHolidayScheduleResponse                                      |   0x13 |
-| * ClearPINCodeResponse                                              |   0x07 |
-| * ClearRFIDCodeResponse                                             |   0x18 |
+| * ClearPinResponse                                                  |   0x07 |
+| * ClearRfidResponse                                                 |   0x18 |
 | * ClearWeekdayScheduleResponse                                      |   0x0D |
-| * ClearYearDayScheduleResponse                                      |   0x10 |
+| * ClearYeardayScheduleResponse                                      |   0x10 |
 | * GetHolidayScheduleResponse                                        |   0x12 |
-| * GetPINCodeResponse                                                |   0x06 |
-| * GetRFIDCodeResponse                                               |   0x17 |
+| * GetPinResponse                                                    |   0x06 |
+| * GetRfidResponse                                                   |   0x17 |
 | * GetUserTypeResponse                                               |   0x15 |
 | * GetWeekdayScheduleResponse                                        |   0x0C |
-| * GetYearDayScheduleResponse                                        |   0x0F |
+| * GetYeardayScheduleResponse                                        |   0x0F |
 | * LockDoorResponse                                                  |   0x00 |
 | * SetHolidayScheduleResponse                                        |   0x11 |
-| * SetPINCodeResponse                                                |   0x05 |
-| * SetRFIDCodeResponse                                               |   0x16 |
+| * SetPinResponse                                                    |   0x05 |
+| * SetRfidResponse                                                   |   0x16 |
 | * SetUserTypeResponse                                               |   0x14 |
 | * SetWeekdayScheduleResponse                                        |   0x0B |
-| * SetYearDayScheduleResponse                                        |   0x0E |
+| * SetYeardayScheduleResponse                                        |   0x0E |
 | * UnlockDoorResponse                                                |   0x01 |
 | * UnlockWithTimeoutResponse                                         |   0x03 |
 |                                                                     |        |
 |------------------------------------------------------------------------------|
 | Commands:                                                           |        |
-| * ClearAllPINCodes                                                  |   0x08 |
-| * ClearAllRFIDCodes                                                 |   0x19 |
+| * ClearAllPins                                                      |   0x08 |
+| * ClearAllRfids                                                     |   0x19 |
 | * ClearHolidaySchedule                                              |   0x13 |
-| * ClearPINCode                                                      |   0x07 |
-| * ClearRFIDCode                                                     |   0x18 |
+| * ClearPin                                                          |   0x07 |
+| * ClearRfid                                                         |   0x18 |
 | * ClearWeekdaySchedule                                              |   0x0D |
-| * ClearYearDaySchedule                                              |   0x10 |
+| * ClearYeardaySchedule                                              |   0x10 |
 | * GetHolidaySchedule                                                |   0x12 |
-| * GetPINCode                                                        |   0x06 |
-| * GetRFIDCode                                                       |   0x17 |
+| * GetPin                                                            |   0x06 |
+| * GetRfid                                                           |   0x17 |
 | * GetUserType                                                       |   0x15 |
 | * GetWeekdaySchedule                                                |   0x0C |
-| * GetYearDaySchedule                                                |   0x0F |
+| * GetYeardaySchedule                                                |   0x0F |
 | * LockDoor                                                          |   0x00 |
 | * SetHolidaySchedule                                                |   0x11 |
-| * SetPINCode                                                        |   0x05 |
-| * SetRFIDCode                                                       |   0x16 |
+| * SetPin                                                            |   0x05 |
+| * SetRfid                                                           |   0x16 |
 | * SetUserType                                                       |   0x14 |
 | * SetWeekdaySchedule                                                |   0x0B |
-| * SetYearDaySchedule                                                |   0x0E |
+| * SetYeardaySchedule                                                |   0x0E |
 | * UnlockDoor                                                        |   0x01 |
 | * UnlockWithTimeout                                                 |   0x03 |
 |------------------------------------------------------------------------------|
@@ -2522,40 +2905,42 @@ public:
 \*----------------------------------------------------------------------------*/
 
 /*
- * Command Response ClearAllPINCodesResponse
+ * Command Response ClearAllPinsResponse
  */
-class ClearAllPINCodesResponse : public ModelCommandResponse
+class ClearAllPinsResponse : public ModelCommandResponse
 {
 public:
-    ClearAllPINCodesResponse() : ModelCommandResponse(0x08) {}
+    ClearAllPinsResponse() : ModelCommandResponse(0x08) {}
 
     bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
     {
         bool success = true;
-        ChipLogProgress(chipTool, "ClearAllPINCodesResponse (0x08):");
+        ChipLogProgress(chipTool, "ClearAllPinsResponse (0x08):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkPassFailStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkPassFailStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
 };
 
 /*
- * Command Response ClearAllRFIDCodesResponse
+ * Command Response ClearAllRfidsResponse
  */
-class ClearAllRFIDCodesResponse : public ModelCommandResponse
+class ClearAllRfidsResponse : public ModelCommandResponse
 {
 public:
-    ClearAllRFIDCodesResponse() : ModelCommandResponse(0x19) {}
+    ClearAllRfidsResponse() : ModelCommandResponse(0x19) {}
 
     bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
     {
         bool success = true;
-        ChipLogProgress(chipTool, "ClearAllRFIDCodesResponse (0x19):");
+        ChipLogProgress(chipTool, "ClearAllRfidsResponse (0x19):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkPassFailStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkPassFailStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
@@ -2575,47 +2960,50 @@ public:
         ChipLogProgress(chipTool, "ClearHolidayScheduleResponse (0x13):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkPassFailStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkPassFailStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
 };
 
 /*
- * Command Response ClearPINCodeResponse
+ * Command Response ClearPinResponse
  */
-class ClearPINCodeResponse : public ModelCommandResponse
+class ClearPinResponse : public ModelCommandResponse
 {
 public:
-    ClearPINCodeResponse() : ModelCommandResponse(0x07) {}
+    ClearPinResponse() : ModelCommandResponse(0x07) {}
 
     bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
     {
         bool success = true;
-        ChipLogProgress(chipTool, "ClearPINCodeResponse (0x07):");
+        ChipLogProgress(chipTool, "ClearPinResponse (0x07):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkPassFailStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkPassFailStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
 };
 
 /*
- * Command Response ClearRFIDCodeResponse
+ * Command Response ClearRfidResponse
  */
-class ClearRFIDCodeResponse : public ModelCommandResponse
+class ClearRfidResponse : public ModelCommandResponse
 {
 public:
-    ClearRFIDCodeResponse() : ModelCommandResponse(0x18) {}
+    ClearRfidResponse() : ModelCommandResponse(0x18) {}
 
     bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
     {
         bool success = true;
-        ChipLogProgress(chipTool, "ClearRFIDCodeResponse (0x18):");
+        ChipLogProgress(chipTool, "ClearRfidResponse (0x18):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkPassFailStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkPassFailStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
@@ -2635,27 +3023,29 @@ public:
         ChipLogProgress(chipTool, "ClearWeekdayScheduleResponse (0x0D):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkPassFailStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkPassFailStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
 };
 
 /*
- * Command Response ClearYearDayScheduleResponse
+ * Command Response ClearYeardayScheduleResponse
  */
-class ClearYearDayScheduleResponse : public ModelCommandResponse
+class ClearYeardayScheduleResponse : public ModelCommandResponse
 {
 public:
-    ClearYearDayScheduleResponse() : ModelCommandResponse(0x10) {}
+    ClearYeardayScheduleResponse() : ModelCommandResponse(0x10) {}
 
     bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
     {
         bool success = true;
-        ChipLogProgress(chipTool, "ClearYearDayScheduleResponse (0x10):");
+        ChipLogProgress(chipTool, "ClearYeardayScheduleResponse (0x10):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkPassFailStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkPassFailStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
@@ -2675,24 +3065,32 @@ public:
         ChipLogProgress(chipTool, "GetHolidayScheduleResponse (0x12):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "holidayScheduleId", chip::Encoding::Read8(message)); // uint8
+        uint8_t holidayScheduleId = chip::Encoding::Read8(message); // uint8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "holidayScheduleId", holidayScheduleId);
+
         CHECK_MESSAGE_LENGTH(1);
         uint8_t status = chip::Encoding::Read8(message); // zclStatus
         success        = CheckStatus(status);
+
         if (status == 0)
         {
             CHECK_MESSAGE_LENGTH(4);
-            ChipLogProgress(chipTool, "  %s: 0x%08x", "localStartTime", chip::Encoding::LittleEndian::Read32(message)); // uint32
+            uint32_t localStartTime = chip::Encoding::LittleEndian::Read32(message); // uint32
+            ChipLogProgress(chipTool, "  %s: 0x%08x", "localStartTime", localStartTime);
         }
+
         if (status == 0)
         {
             CHECK_MESSAGE_LENGTH(4);
-            ChipLogProgress(chipTool, "  %s: 0x%08x", "localEndTime", chip::Encoding::LittleEndian::Read32(message)); // uint32
+            uint32_t localEndTime = chip::Encoding::LittleEndian::Read32(message); // uint32
+            ChipLogProgress(chipTool, "  %s: 0x%08x", "localEndTime", localEndTime);
         }
+
         if (status == 0)
         {
             CHECK_MESSAGE_LENGTH(1);
-            ChipLogProgress(chipTool, "  %s: 0x%02x", "operatingModeDuringHoliday", chip::Encoding::Read8(message)); // DrlkOperMode
+            uint8_t operatingModeDuringHoliday = chip::Encoding::Read8(message); // DrlkOperMode
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "operatingModeDuringHoliday", operatingModeDuringHoliday);
         }
 
         return success;
@@ -2700,24 +3098,30 @@ public:
 };
 
 /*
- * Command Response GetPINCodeResponse
+ * Command Response GetPinResponse
  */
-class GetPINCodeResponse : public ModelCommandResponse
+class GetPinResponse : public ModelCommandResponse
 {
 public:
-    GetPINCodeResponse() : ModelCommandResponse(0x06) {}
+    GetPinResponse() : ModelCommandResponse(0x06) {}
 
     bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
     {
         bool success = true;
-        ChipLogProgress(chipTool, "GetPINCodeResponse (0x06):");
+        ChipLogProgress(chipTool, "GetPinResponse (0x06):");
 
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "userId", chip::Encoding::LittleEndian::Read16(message)); // uint16
+        uint16_t userId = chip::Encoding::LittleEndian::Read16(message); // uint16
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "userId", userId);
+
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "userStatus", chip::Encoding::Read8(message)); // DrlkUserStatus
+        uint8_t userStatus = chip::Encoding::Read8(message); // DrlkUserStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "userStatus", userStatus);
+
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "userType", chip::Encoding::Read8(message)); // DrlkUserType
+        uint8_t userType = chip::Encoding::Read8(message); // DrlkUserType
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "userType", userType);
+
         CHECK_MESSAGE_LENGTH(1);
         {
             uint8_t codeLen = chip::Encoding::Read8(message);              // octstr
@@ -2734,24 +3138,30 @@ public:
 };
 
 /*
- * Command Response GetRFIDCodeResponse
+ * Command Response GetRfidResponse
  */
-class GetRFIDCodeResponse : public ModelCommandResponse
+class GetRfidResponse : public ModelCommandResponse
 {
 public:
-    GetRFIDCodeResponse() : ModelCommandResponse(0x17) {}
+    GetRfidResponse() : ModelCommandResponse(0x17) {}
 
     bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
     {
         bool success = true;
-        ChipLogProgress(chipTool, "GetRFIDCodeResponse (0x17):");
+        ChipLogProgress(chipTool, "GetRfidResponse (0x17):");
 
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "userId", chip::Encoding::LittleEndian::Read16(message)); // uint16
+        uint16_t userId = chip::Encoding::LittleEndian::Read16(message); // uint16
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "userId", userId);
+
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "userStatus", chip::Encoding::Read8(message)); // DrlkUserStatus
+        uint8_t userStatus = chip::Encoding::Read8(message); // DrlkUserStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "userStatus", userStatus);
+
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "userType", chip::Encoding::Read8(message)); // DrlkUserType
+        uint8_t userType = chip::Encoding::Read8(message); // DrlkUserType
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "userType", userType);
+
         CHECK_MESSAGE_LENGTH(1);
         {
             uint8_t rFIdCodeLen = chip::Encoding::Read8(message);                  // octstr
@@ -2781,9 +3191,12 @@ public:
         ChipLogProgress(chipTool, "GetUserTypeResponse (0x15):");
 
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "userId", chip::Encoding::LittleEndian::Read16(message)); // uint16
+        uint16_t userId = chip::Encoding::LittleEndian::Read16(message); // uint16
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "userId", userId);
+
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "userType", chip::Encoding::Read8(message)); // DrlkUserType
+        uint8_t userType = chip::Encoding::Read8(message); // DrlkUserType
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "userType", userType);
 
         return success;
     }
@@ -2803,36 +3216,50 @@ public:
         ChipLogProgress(chipTool, "GetWeekdayScheduleResponse (0x0C):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "scheduleId", chip::Encoding::Read8(message)); // uint8
+        uint8_t scheduleId = chip::Encoding::Read8(message); // uint8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "scheduleId", scheduleId);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "userId", chip::Encoding::LittleEndian::Read16(message)); // uint16
+        uint16_t userId = chip::Encoding::LittleEndian::Read16(message); // uint16
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "userId", userId);
+
         CHECK_MESSAGE_LENGTH(1);
         uint8_t status = chip::Encoding::Read8(message); // zclStatus
         success        = CheckStatus(status);
+
         if (status == 0)
         {
             CHECK_MESSAGE_LENGTH(1);
-            ChipLogProgress(chipTool, "  %s: 0x%02x", "daysMask", chip::Encoding::Read8(message)); // DrlkDaysMask
+            uint8_t daysMask = chip::Encoding::Read8(message); // DrlkDaysMask
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "daysMask", daysMask);
         }
+
         if (status == 0)
         {
             CHECK_MESSAGE_LENGTH(1);
-            ChipLogProgress(chipTool, "  %s: 0x%02x", "startHour", chip::Encoding::Read8(message)); // uint8
+            uint8_t startHour = chip::Encoding::Read8(message); // uint8
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "startHour", startHour);
         }
+
         if (status == 0)
         {
             CHECK_MESSAGE_LENGTH(1);
-            ChipLogProgress(chipTool, "  %s: 0x%02x", "startMinute", chip::Encoding::Read8(message)); // uint8
+            uint8_t startMinute = chip::Encoding::Read8(message); // uint8
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "startMinute", startMinute);
         }
+
         if (status == 0)
         {
             CHECK_MESSAGE_LENGTH(1);
-            ChipLogProgress(chipTool, "  %s: 0x%02x", "endHour", chip::Encoding::Read8(message)); // uint8
+            uint8_t endHour = chip::Encoding::Read8(message); // uint8
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "endHour", endHour);
         }
+
         if (status == 0)
         {
             CHECK_MESSAGE_LENGTH(1);
-            ChipLogProgress(chipTool, "  %s: 0x%02x", "endMinute", chip::Encoding::Read8(message)); // uint8
+            uint8_t endMinute = chip::Encoding::Read8(message); // uint8
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "endMinute", endMinute);
         }
 
         return success;
@@ -2840,34 +3267,42 @@ public:
 };
 
 /*
- * Command Response GetYearDayScheduleResponse
+ * Command Response GetYeardayScheduleResponse
  */
-class GetYearDayScheduleResponse : public ModelCommandResponse
+class GetYeardayScheduleResponse : public ModelCommandResponse
 {
 public:
-    GetYearDayScheduleResponse() : ModelCommandResponse(0x0F) {}
+    GetYeardayScheduleResponse() : ModelCommandResponse(0x0F) {}
 
     bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
     {
         bool success = true;
-        ChipLogProgress(chipTool, "GetYearDayScheduleResponse (0x0F):");
+        ChipLogProgress(chipTool, "GetYeardayScheduleResponse (0x0F):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "scheduleId", chip::Encoding::Read8(message)); // uint8
+        uint8_t scheduleId = chip::Encoding::Read8(message); // uint8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "scheduleId", scheduleId);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "userId", chip::Encoding::LittleEndian::Read16(message)); // uint16
+        uint16_t userId = chip::Encoding::LittleEndian::Read16(message); // uint16
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "userId", userId);
+
         CHECK_MESSAGE_LENGTH(1);
         uint8_t status = chip::Encoding::Read8(message); // zclStatus
         success        = CheckStatus(status);
+
         if (status == 0)
         {
             CHECK_MESSAGE_LENGTH(4);
-            ChipLogProgress(chipTool, "  %s: 0x%08x", "localStartTime", chip::Encoding::LittleEndian::Read32(message)); // uint32
+            uint32_t localStartTime = chip::Encoding::LittleEndian::Read32(message); // uint32
+            ChipLogProgress(chipTool, "  %s: 0x%08x", "localStartTime", localStartTime);
         }
+
         if (status == 0)
         {
             CHECK_MESSAGE_LENGTH(4);
-            ChipLogProgress(chipTool, "  %s: 0x%08x", "localEndTime", chip::Encoding::LittleEndian::Read32(message)); // uint32
+            uint32_t localEndTime = chip::Encoding::LittleEndian::Read32(message); // uint32
+            ChipLogProgress(chipTool, "  %s: 0x%08x", "localEndTime", localEndTime);
         }
 
         return success;
@@ -2909,47 +3344,50 @@ public:
         ChipLogProgress(chipTool, "SetHolidayScheduleResponse (0x11):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkPassFailStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkPassFailStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
 };
 
 /*
- * Command Response SetPINCodeResponse
+ * Command Response SetPinResponse
  */
-class SetPINCodeResponse : public ModelCommandResponse
+class SetPinResponse : public ModelCommandResponse
 {
 public:
-    SetPINCodeResponse() : ModelCommandResponse(0x05) {}
+    SetPinResponse() : ModelCommandResponse(0x05) {}
 
     bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
     {
         bool success = true;
-        ChipLogProgress(chipTool, "SetPINCodeResponse (0x05):");
+        ChipLogProgress(chipTool, "SetPinResponse (0x05):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkSetCodeStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkSetCodeStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
 };
 
 /*
- * Command Response SetRFIDCodeResponse
+ * Command Response SetRfidResponse
  */
-class SetRFIDCodeResponse : public ModelCommandResponse
+class SetRfidResponse : public ModelCommandResponse
 {
 public:
-    SetRFIDCodeResponse() : ModelCommandResponse(0x16) {}
+    SetRfidResponse() : ModelCommandResponse(0x16) {}
 
     bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
     {
         bool success = true;
-        ChipLogProgress(chipTool, "SetRFIDCodeResponse (0x16):");
+        ChipLogProgress(chipTool, "SetRfidResponse (0x16):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkSetCodeStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkSetCodeStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
@@ -2969,7 +3407,8 @@ public:
         ChipLogProgress(chipTool, "SetUserTypeResponse (0x14):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkPassFailStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkPassFailStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
@@ -2989,27 +3428,29 @@ public:
         ChipLogProgress(chipTool, "SetWeekdayScheduleResponse (0x0B):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkPassFailStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkPassFailStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
 };
 
 /*
- * Command Response SetYearDayScheduleResponse
+ * Command Response SetYeardayScheduleResponse
  */
-class SetYearDayScheduleResponse : public ModelCommandResponse
+class SetYeardayScheduleResponse : public ModelCommandResponse
 {
 public:
-    SetYearDayScheduleResponse() : ModelCommandResponse(0x0E) {}
+    SetYeardayScheduleResponse() : ModelCommandResponse(0x0E) {}
 
     bool HandleResponse(uint8_t * message, uint16_t messageLen) const override
     {
         bool success = true;
-        ChipLogProgress(chipTool, "SetYearDayScheduleResponse (0x0E):");
+        ChipLogProgress(chipTool, "SetYeardayScheduleResponse (0x0E):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // DrlkPassFailStatus
+        uint8_t status = chip::Encoding::Read8(message); // DrlkPassFailStatus
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
 
         return success;
     }
@@ -3058,17 +3499,14 @@ public:
 };
 
 /*
- * Command ClearAllPINCodes
+ * Command ClearAllPins
  */
-class DoorLockClearAllPINCodes : public ModelCommand
+class DoorLockClearAllPins : public ModelCommand
 {
 public:
-    DoorLockClearAllPINCodes() : ModelCommand("clear-all-pincodes", kDoorLockClusterId, 0x08) { ModelCommand::AddArguments(); }
+    DoorLockClearAllPins() : ModelCommand("clear-all-pins", kDoorLockClusterId, 0x08) { ModelCommand::AddArguments(); }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeDoorLockClusterClearAllPINCodesCommand(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeDoorLockClusterClearAllPinsCommand(endPointId); }
 
     // Global Response: DefaultResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -3077,26 +3515,23 @@ public:
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
-    // Specific Response: ClearAllPINCodesResponse
+    // Specific Response: ClearAllPinsResponse
     bool HandleSpecificResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        ClearAllPINCodesResponse response;
+        ClearAllPinsResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 };
 
 /*
- * Command ClearAllRFIDCodes
+ * Command ClearAllRfids
  */
-class DoorLockClearAllRFIDCodes : public ModelCommand
+class DoorLockClearAllRfids : public ModelCommand
 {
 public:
-    DoorLockClearAllRFIDCodes() : ModelCommand("clear-all-rfidcodes", kDoorLockClusterId, 0x19) { ModelCommand::AddArguments(); }
+    DoorLockClearAllRfids() : ModelCommand("clear-all-rfids", kDoorLockClusterId, 0x19) { ModelCommand::AddArguments(); }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeDoorLockClusterClearAllRFIDCodesCommand(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeDoorLockClusterClearAllRfidsCommand(endPointId); }
 
     // Global Response: DefaultResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -3105,10 +3540,10 @@ public:
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
-    // Specific Response: ClearAllRFIDCodesResponse
+    // Specific Response: ClearAllRfidsResponse
     bool HandleSpecificResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        ClearAllRFIDCodesResponse response;
+        ClearAllRfidsResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 };
@@ -3125,9 +3560,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterClearHolidayScheduleCommand(buffer->Start(), bufferSize, endPointId, mHolidayScheduleID);
+        return encodeDoorLockClusterClearHolidayScheduleCommand(endPointId, mHolidayScheduleID);
     }
 
     // Global Response: DefaultResponse
@@ -3149,20 +3584,20 @@ private:
 };
 
 /*
- * Command ClearPINCode
+ * Command ClearPin
  */
-class DoorLockClearPINCode : public ModelCommand
+class DoorLockClearPin : public ModelCommand
 {
 public:
-    DoorLockClearPINCode() : ModelCommand("clear-pincode", kDoorLockClusterId, 0x07)
+    DoorLockClearPin() : ModelCommand("clear-pin", kDoorLockClusterId, 0x07)
     {
         AddArgument("userID", 0, UINT16_MAX, &mUserID);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterClearPINCodeCommand(buffer->Start(), bufferSize, endPointId, mUserID);
+        return encodeDoorLockClusterClearPinCommand(endPointId, mUserID);
     }
 
     // Global Response: DefaultResponse
@@ -3172,10 +3607,10 @@ public:
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
-    // Specific Response: ClearPINCodeResponse
+    // Specific Response: ClearPinResponse
     bool HandleSpecificResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        ClearPINCodeResponse response;
+        ClearPinResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
@@ -3184,20 +3619,20 @@ private:
 };
 
 /*
- * Command ClearRFIDCode
+ * Command ClearRfid
  */
-class DoorLockClearRFIDCode : public ModelCommand
+class DoorLockClearRfid : public ModelCommand
 {
 public:
-    DoorLockClearRFIDCode() : ModelCommand("clear-rfidcode", kDoorLockClusterId, 0x18)
+    DoorLockClearRfid() : ModelCommand("clear-rfid", kDoorLockClusterId, 0x18)
     {
         AddArgument("userID", 0, UINT16_MAX, &mUserID);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterClearRFIDCodeCommand(buffer->Start(), bufferSize, endPointId, mUserID);
+        return encodeDoorLockClusterClearRfidCommand(endPointId, mUserID);
     }
 
     // Global Response: DefaultResponse
@@ -3207,10 +3642,10 @@ public:
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
-    // Specific Response: ClearRFIDCodeResponse
+    // Specific Response: ClearRfidResponse
     bool HandleSpecificResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        ClearRFIDCodeResponse response;
+        ClearRfidResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
@@ -3231,9 +3666,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterClearWeekdayScheduleCommand(buffer->Start(), bufferSize, endPointId, mScheduleID, mUserID);
+        return encodeDoorLockClusterClearWeekdayScheduleCommand(endPointId, mScheduleID, mUserID);
     }
 
     // Global Response: DefaultResponse
@@ -3256,21 +3691,21 @@ private:
 };
 
 /*
- * Command ClearYearDaySchedule
+ * Command ClearYeardaySchedule
  */
-class DoorLockClearYearDaySchedule : public ModelCommand
+class DoorLockClearYeardaySchedule : public ModelCommand
 {
 public:
-    DoorLockClearYearDaySchedule() : ModelCommand("clear-year-day-schedule", kDoorLockClusterId, 0x10)
+    DoorLockClearYeardaySchedule() : ModelCommand("clear-yearday-schedule", kDoorLockClusterId, 0x10)
     {
         AddArgument("scheduleID", 0, UINT8_MAX, &mScheduleID);
         AddArgument("userID", 0, UINT16_MAX, &mUserID);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterClearYearDayScheduleCommand(buffer->Start(), bufferSize, endPointId, mScheduleID, mUserID);
+        return encodeDoorLockClusterClearYeardayScheduleCommand(endPointId, mScheduleID, mUserID);
     }
 
     // Global Response: DefaultResponse
@@ -3280,10 +3715,10 @@ public:
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
-    // Specific Response: ClearYearDayScheduleResponse
+    // Specific Response: ClearYeardayScheduleResponse
     bool HandleSpecificResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        ClearYearDayScheduleResponse response;
+        ClearYeardayScheduleResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
@@ -3304,9 +3739,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterGetHolidayScheduleCommand(buffer->Start(), bufferSize, endPointId, mHolidayScheduleID);
+        return encodeDoorLockClusterGetHolidayScheduleCommand(endPointId, mHolidayScheduleID);
     }
 
     // Global Response: DefaultResponse
@@ -3328,20 +3763,20 @@ private:
 };
 
 /*
- * Command GetPINCode
+ * Command GetPin
  */
-class DoorLockGetPINCode : public ModelCommand
+class DoorLockGetPin : public ModelCommand
 {
 public:
-    DoorLockGetPINCode() : ModelCommand("get-pincode", kDoorLockClusterId, 0x06)
+    DoorLockGetPin() : ModelCommand("get-pin", kDoorLockClusterId, 0x06)
     {
         AddArgument("userID", 0, UINT16_MAX, &mUserID);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterGetPINCodeCommand(buffer->Start(), bufferSize, endPointId, mUserID);
+        return encodeDoorLockClusterGetPinCommand(endPointId, mUserID);
     }
 
     // Global Response: DefaultResponse
@@ -3351,10 +3786,10 @@ public:
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
-    // Specific Response: GetPINCodeResponse
+    // Specific Response: GetPinResponse
     bool HandleSpecificResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        GetPINCodeResponse response;
+        GetPinResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
@@ -3363,20 +3798,20 @@ private:
 };
 
 /*
- * Command GetRFIDCode
+ * Command GetRfid
  */
-class DoorLockGetRFIDCode : public ModelCommand
+class DoorLockGetRfid : public ModelCommand
 {
 public:
-    DoorLockGetRFIDCode() : ModelCommand("get-rfidcode", kDoorLockClusterId, 0x17)
+    DoorLockGetRfid() : ModelCommand("get-rfid", kDoorLockClusterId, 0x17)
     {
         AddArgument("userID", 0, UINT16_MAX, &mUserID);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterGetRFIDCodeCommand(buffer->Start(), bufferSize, endPointId, mUserID);
+        return encodeDoorLockClusterGetRfidCommand(endPointId, mUserID);
     }
 
     // Global Response: DefaultResponse
@@ -3386,10 +3821,10 @@ public:
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
-    // Specific Response: GetRFIDCodeResponse
+    // Specific Response: GetRfidResponse
     bool HandleSpecificResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        GetRFIDCodeResponse response;
+        GetRfidResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
@@ -3409,9 +3844,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterGetUserTypeCommand(buffer->Start(), bufferSize, endPointId, mUserID);
+        return encodeDoorLockClusterGetUserTypeCommand(endPointId, mUserID);
     }
 
     // Global Response: DefaultResponse
@@ -3445,9 +3880,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterGetWeekdayScheduleCommand(buffer->Start(), bufferSize, endPointId, mScheduleID, mUserID);
+        return encodeDoorLockClusterGetWeekdayScheduleCommand(endPointId, mScheduleID, mUserID);
     }
 
     // Global Response: DefaultResponse
@@ -3470,21 +3905,21 @@ private:
 };
 
 /*
- * Command GetYearDaySchedule
+ * Command GetYeardaySchedule
  */
-class DoorLockGetYearDaySchedule : public ModelCommand
+class DoorLockGetYeardaySchedule : public ModelCommand
 {
 public:
-    DoorLockGetYearDaySchedule() : ModelCommand("get-year-day-schedule", kDoorLockClusterId, 0x0F)
+    DoorLockGetYeardaySchedule() : ModelCommand("get-yearday-schedule", kDoorLockClusterId, 0x0F)
     {
         AddArgument("scheduleID", 0, UINT8_MAX, &mScheduleID);
         AddArgument("userID", 0, UINT16_MAX, &mUserID);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterGetYearDayScheduleCommand(buffer->Start(), bufferSize, endPointId, mScheduleID, mUserID);
+        return encodeDoorLockClusterGetYeardayScheduleCommand(endPointId, mScheduleID, mUserID);
     }
 
     // Global Response: DefaultResponse
@@ -3494,10 +3929,10 @@ public:
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
-    // Specific Response: GetYearDayScheduleResponse
+    // Specific Response: GetYeardayScheduleResponse
     bool HandleSpecificResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        GetYearDayScheduleResponse response;
+        GetYeardayScheduleResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
@@ -3518,9 +3953,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterLockDoorCommand(buffer->Start(), bufferSize, endPointId, mPINOrRFIDCode);
+        return encodeDoorLockClusterLockDoorCommand(endPointId, mPINOrRFIDCode);
     }
 
     // Global Response: DefaultResponse
@@ -3556,10 +3991,10 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterSetHolidayScheduleCommand(buffer->Start(), bufferSize, endPointId, mHolidayScheduleID,
-                                                              mLocalStartTime, mLocalEndTime, mOperatingModeDuringHoliday);
+        return encodeDoorLockClusterSetHolidayScheduleCommand(endPointId, mHolidayScheduleID, mLocalStartTime, mLocalEndTime,
+                                                              mOperatingModeDuringHoliday);
     }
 
     // Global Response: DefaultResponse
@@ -3584,24 +4019,23 @@ private:
 };
 
 /*
- * Command SetPINCode
+ * Command SetPin
  */
-class DoorLockSetPINCode : public ModelCommand
+class DoorLockSetPin : public ModelCommand
 {
 public:
-    DoorLockSetPINCode() : ModelCommand("set-pincode", kDoorLockClusterId, 0x05)
+    DoorLockSetPin() : ModelCommand("set-pin", kDoorLockClusterId, 0x05)
     {
         AddArgument("userID", 0, UINT16_MAX, &mUserID);
         AddArgument("userStatus", 0, UINT8_MAX, &mUserStatus);
         AddArgument("userType", 0, UINT8_MAX, &mUserType);
-        AddArgument("pIN", &mPIN);
+        AddArgument("pin", &mPIN);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterSetPINCodeCommand(buffer->Start(), bufferSize, endPointId, mUserID, mUserStatus, mUserType,
-                                                      mPIN);
+        return encodeDoorLockClusterSetPinCommand(endPointId, mUserID, mUserStatus, mUserType, mPIN);
     }
 
     // Global Response: DefaultResponse
@@ -3611,10 +4045,10 @@ public:
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
-    // Specific Response: SetPINCodeResponse
+    // Specific Response: SetPinResponse
     bool HandleSpecificResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        SetPINCodeResponse response;
+        SetPinResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
@@ -3626,24 +4060,23 @@ private:
 };
 
 /*
- * Command SetRFIDCode
+ * Command SetRfid
  */
-class DoorLockSetRFIDCode : public ModelCommand
+class DoorLockSetRfid : public ModelCommand
 {
 public:
-    DoorLockSetRFIDCode() : ModelCommand("set-rfidcode", kDoorLockClusterId, 0x16)
+    DoorLockSetRfid() : ModelCommand("set-rfid", kDoorLockClusterId, 0x16)
     {
         AddArgument("userID", 0, UINT16_MAX, &mUserID);
         AddArgument("userStatus", 0, UINT8_MAX, &mUserStatus);
         AddArgument("userType", 0, UINT8_MAX, &mUserType);
-        AddArgument("rFIDCode", &mRFIDCode);
+        AddArgument("rfid", &mRFID);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterSetRFIDCodeCommand(buffer->Start(), bufferSize, endPointId, mUserID, mUserStatus, mUserType,
-                                                       mRFIDCode);
+        return encodeDoorLockClusterSetRfidCommand(endPointId, mUserID, mUserStatus, mUserType, mRFID);
     }
 
     // Global Response: DefaultResponse
@@ -3653,10 +4086,10 @@ public:
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
-    // Specific Response: SetRFIDCodeResponse
+    // Specific Response: SetRfidResponse
     bool HandleSpecificResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        SetRFIDCodeResponse response;
+        SetRfidResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
@@ -3664,7 +4097,7 @@ private:
     uint16_t mUserID;
     uint8_t mUserStatus;
     uint8_t mUserType;
-    char * mRFIDCode;
+    char * mRFID;
 };
 
 /*
@@ -3680,9 +4113,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterSetUserTypeCommand(buffer->Start(), bufferSize, endPointId, mUserID, mUserType);
+        return encodeDoorLockClusterSetUserTypeCommand(endPointId, mUserID, mUserType);
     }
 
     // Global Response: DefaultResponse
@@ -3722,10 +4155,10 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterSetWeekdayScheduleCommand(buffer->Start(), bufferSize, endPointId, mScheduleID, mUserID,
-                                                              mDaysMask, mStartHour, mStartMinute, mEndHour, mEndMinute);
+        return encodeDoorLockClusterSetWeekdayScheduleCommand(endPointId, mScheduleID, mUserID, mDaysMask, mStartHour, mStartMinute,
+                                                              mEndHour, mEndMinute);
     }
 
     // Global Response: DefaultResponse
@@ -3753,12 +4186,12 @@ private:
 };
 
 /*
- * Command SetYearDaySchedule
+ * Command SetYeardaySchedule
  */
-class DoorLockSetYearDaySchedule : public ModelCommand
+class DoorLockSetYeardaySchedule : public ModelCommand
 {
 public:
-    DoorLockSetYearDaySchedule() : ModelCommand("set-year-day-schedule", kDoorLockClusterId, 0x0E)
+    DoorLockSetYeardaySchedule() : ModelCommand("set-yearday-schedule", kDoorLockClusterId, 0x0E)
     {
         AddArgument("scheduleID", 0, UINT8_MAX, &mScheduleID);
         AddArgument("userID", 0, UINT16_MAX, &mUserID);
@@ -3767,10 +4200,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterSetYearDayScheduleCommand(buffer->Start(), bufferSize, endPointId, mScheduleID, mUserID,
-                                                              mLocalStartTime, mLocalEndTime);
+        return encodeDoorLockClusterSetYeardayScheduleCommand(endPointId, mScheduleID, mUserID, mLocalStartTime, mLocalEndTime);
     }
 
     // Global Response: DefaultResponse
@@ -3780,10 +4212,10 @@ public:
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
-    // Specific Response: SetYearDayScheduleResponse
+    // Specific Response: SetYeardayScheduleResponse
     bool HandleSpecificResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
-        SetYearDayScheduleResponse response;
+        SetYeardayScheduleResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 
@@ -3806,9 +4238,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterUnlockDoorCommand(buffer->Start(), bufferSize, endPointId, mPINOrRFIDCode);
+        return encodeDoorLockClusterUnlockDoorCommand(endPointId, mPINOrRFIDCode);
     }
 
     // Global Response: DefaultResponse
@@ -3842,10 +4274,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterUnlockWithTimeoutCommand(buffer->Start(), bufferSize, endPointId, mTimeoutInSeconds,
-                                                             mPINOrRFIDCode);
+        return encodeDoorLockClusterUnlockWithTimeoutCommand(endPointId, mTimeoutInSeconds, mPINOrRFIDCode);
     }
 
     // Global Response: DefaultResponse
@@ -3868,6 +4299,24 @@ private:
 };
 
 /*
+ * Discover attributes
+ */
+class DiscoverDoorLockAttributes : public ModelCommand
+{
+public:
+    DiscoverDoorLockAttributes() : ModelCommand("discover", kDoorLockClusterId, 0x0c) { ModelCommand::AddArguments(); }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeDoorLockClusterDiscoverAttributes(endPointId); }
+
+    // Global Response: DiscoverAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        DiscoverAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
  * Attribute LockState
  */
 class ReadDoorLockLockState : public ModelCommand
@@ -3879,9 +4328,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterReadLockStateAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeDoorLockClusterReadLockStateAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -3890,6 +4339,34 @@ public:
         ReadAttributesResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
+};
+
+class ReportDoorLockLockState : public ModelCommand
+{
+public:
+    ReportDoorLockLockState() : ModelCommand("report", kDoorLockClusterId, 0x06)
+    {
+        AddArgument("attr-name", "lock-state");
+        AddArgument("min-interval", 0, UINT16_MAX, &mMinInterval);
+        AddArgument("max-interval", 0, UINT16_MAX, &mMaxInterval);
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeDoorLockClusterReportLockStateAttribute(endPointId, mMinInterval, mMaxInterval);
+    }
+
+    // Global Response: ConfigureReportingResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ConfigureReportingResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+
+private:
+    uint16_t mMinInterval;
+    uint16_t mMaxInterval;
 };
 
 /*
@@ -3904,10 +4381,7 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeDoorLockClusterReadLockTypeAttribute(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeDoorLockClusterReadLockTypeAttribute(endPointId); }
 
     // Global Response: ReadAttributesResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -3929,9 +4403,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeDoorLockClusterReadActuatorEnabledAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeDoorLockClusterReadActuatorEnabledAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -3978,9 +4452,12 @@ public:
         ChipLogProgress(chipTool, "AddGroupResponse (0x00):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // enum8
+        uint8_t status = chip::Encoding::Read8(message); // enum8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", chip::Encoding::LittleEndian::Read16(message)); // uint16
+        uint16_t groupId = chip::Encoding::LittleEndian::Read16(message); // uint16
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", groupId);
 
         return success;
     }
@@ -4000,14 +4477,19 @@ public:
         ChipLogProgress(chipTool, "GetGroupMembershipResponse (0x02):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "capacity", chip::Encoding::Read8(message)); // uint8
+        uint8_t capacity = chip::Encoding::Read8(message); // uint8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "capacity", capacity);
+
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "groupCount", chip::Encoding::Read8(message)); // uint8
+        uint8_t groupCount = chip::Encoding::Read8(message); // uint8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "groupCount", groupCount);
+
         // uint16_t uint16[]
         while (messageLen)
         {
             CHECK_MESSAGE_LENGTH(2);
-            ChipLogProgress(chipTool, "  %s: 0x%04x", "groupList", chip::Encoding::LittleEndian::Read16(message)); // uint16
+            uint16_t groupList = chip::Encoding::LittleEndian::Read16(message); // uint16
+            ChipLogProgress(chipTool, "  %s: 0x%04x", "groupList", groupList);
         }
 
         return success;
@@ -4028,9 +4510,12 @@ public:
         ChipLogProgress(chipTool, "RemoveGroupResponse (0x03):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // enum8
+        uint8_t status = chip::Encoding::Read8(message); // enum8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", chip::Encoding::LittleEndian::Read16(message)); // uint16
+        uint16_t groupId = chip::Encoding::LittleEndian::Read16(message); // uint16
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", groupId);
 
         return success;
     }
@@ -4050,9 +4535,13 @@ public:
         ChipLogProgress(chipTool, "ViewGroupResponse (0x01):");
 
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", chip::Encoding::Read8(message)); // enum8
+        uint8_t status = chip::Encoding::Read8(message); // enum8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "status", status);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", chip::Encoding::LittleEndian::Read16(message)); // uint16
+        uint16_t groupId = chip::Encoding::LittleEndian::Read16(message); // uint16
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", groupId);
+
         CHECK_MESSAGE_LENGTH(1);
         {
             uint8_t groupNameLen = chip::Encoding::Read8(message);                   // string
@@ -4081,9 +4570,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeGroupsClusterAddGroupCommand(buffer->Start(), bufferSize, endPointId, mGroupId, mGroupName);
+        return encodeGroupsClusterAddGroupCommand(endPointId, mGroupId, mGroupName);
     }
 
     // Global Response: DefaultResponse
@@ -4118,9 +4607,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeGroupsClusterAddGroupIfIdentifyingCommand(buffer->Start(), bufferSize, endPointId, mGroupId, mGroupName);
+        return encodeGroupsClusterAddGroupIfIdentifyingCommand(endPointId, mGroupId, mGroupName);
     }
 
     // Global Response: DefaultResponse
@@ -4150,9 +4639,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeGroupsClusterGetGroupMembershipCommand(buffer->Start(), bufferSize, endPointId, mGroupCount, mGroupList);
+        return encodeGroupsClusterGetGroupMembershipCommand(endPointId, mGroupCount, mGroupList);
     }
 
     // Global Response: DefaultResponse
@@ -4182,10 +4671,7 @@ class GroupsRemoveAllGroups : public ModelCommand
 public:
     GroupsRemoveAllGroups() : ModelCommand("remove-all-groups", kGroupsClusterId, 0x04) { ModelCommand::AddArguments(); }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeGroupsClusterRemoveAllGroupsCommand(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeGroupsClusterRemoveAllGroupsCommand(endPointId); }
 
     // Global Response: DefaultResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -4207,9 +4693,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeGroupsClusterRemoveGroupCommand(buffer->Start(), bufferSize, endPointId, mGroupId);
+        return encodeGroupsClusterRemoveGroupCommand(endPointId, mGroupId);
     }
 
     // Global Response: DefaultResponse
@@ -4242,9 +4728,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeGroupsClusterViewGroupCommand(buffer->Start(), bufferSize, endPointId, mGroupId);
+        return encodeGroupsClusterViewGroupCommand(endPointId, mGroupId);
     }
 
     // Global Response: DefaultResponse
@@ -4266,6 +4752,24 @@ private:
 };
 
 /*
+ * Discover attributes
+ */
+class DiscoverGroupsAttributes : public ModelCommand
+{
+public:
+    DiscoverGroupsAttributes() : ModelCommand("discover", kGroupsClusterId, 0x0c) { ModelCommand::AddArguments(); }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeGroupsClusterDiscoverAttributes(endPointId); }
+
+    // Global Response: DiscoverAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        DiscoverAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
  * Attribute NameSupport
  */
 class ReadGroupsNameSupport : public ModelCommand
@@ -4277,10 +4781,186 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeGroupsClusterReadNameSupportAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeGroupsClusterReadNameSupportAttribute(endPointId);
     }
+
+    // Global Response: ReadAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ReadAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*----------------------------------------------------------------------------*\
+| Cluster IasZone                                                     | 0x0500 |
+|------------------------------------------------------------------------------|
+| Responses:                                                          |        |
+|                                                                     |        |
+|------------------------------------------------------------------------------|
+| Commands:                                                           |        |
+|------------------------------------------------------------------------------|
+| Attributes:                                                         |        |
+| * ZoneState                                                         | 0x0000 |
+| * ZoneType                                                          | 0x0001 |
+| * ZoneStatus                                                        | 0x0002 |
+| * IasCieAddress                                                     | 0x0010 |
+| * ZoneID                                                            | 0x0011 |
+\*----------------------------------------------------------------------------*/
+
+/*
+ * Discover attributes
+ */
+class DiscoverIasZoneAttributes : public ModelCommand
+{
+public:
+    DiscoverIasZoneAttributes() : ModelCommand("discover", kIasZoneClusterId, 0x0c) { ModelCommand::AddArguments(); }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeIasZoneClusterDiscoverAttributes(endPointId); }
+
+    // Global Response: DiscoverAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        DiscoverAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
+ * Attribute ZoneState
+ */
+class ReadIasZoneZoneState : public ModelCommand
+{
+public:
+    ReadIasZoneZoneState() : ModelCommand("read", kIasZoneClusterId, 0x00)
+    {
+        AddArgument("attr-name", "zone-state");
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeIasZoneClusterReadZoneStateAttribute(endPointId); }
+
+    // Global Response: ReadAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ReadAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
+ * Attribute ZoneType
+ */
+class ReadIasZoneZoneType : public ModelCommand
+{
+public:
+    ReadIasZoneZoneType() : ModelCommand("read", kIasZoneClusterId, 0x00)
+    {
+        AddArgument("attr-name", "zone-type");
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeIasZoneClusterReadZoneTypeAttribute(endPointId); }
+
+    // Global Response: ReadAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ReadAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
+ * Attribute ZoneStatus
+ */
+class ReadIasZoneZoneStatus : public ModelCommand
+{
+public:
+    ReadIasZoneZoneStatus() : ModelCommand("read", kIasZoneClusterId, 0x00)
+    {
+        AddArgument("attr-name", "zone-status");
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeIasZoneClusterReadZoneStatusAttribute(endPointId);
+    }
+
+    // Global Response: ReadAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ReadAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
+ * Attribute IasCieAddress
+ */
+class ReadIasZoneIasCieAddress : public ModelCommand
+{
+public:
+    ReadIasZoneIasCieAddress() : ModelCommand("read", kIasZoneClusterId, 0x00)
+    {
+        AddArgument("attr-name", "ias-cie-address");
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeIasZoneClusterReadIasCieAddressAttribute(endPointId);
+    }
+
+    // Global Response: ReadAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ReadAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+class WriteIasZoneIasCieAddress : public ModelCommand
+{
+public:
+    WriteIasZoneIasCieAddress() : ModelCommand("write", kIasZoneClusterId, 0x01)
+    {
+        AddArgument("attr-name", "ias-cie-address");
+        AddArgument("attr-value", 0, UINT64_MAX, &mIasCieAddress);
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeIasZoneClusterWriteIasCieAddressAttribute(endPointId, mIasCieAddress);
+    }
+
+    // Global Response: WriteAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        WriteAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+
+private:
+    uint64_t mIasCieAddress;
+};
+
+/*
+ * Attribute ZoneID
+ */
+class ReadIasZoneZoneID : public ModelCommand
+{
+public:
+    ReadIasZoneZoneID() : ModelCommand("read", kIasZoneClusterId, 0x00)
+    {
+        AddArgument("attr-name", "zone-id");
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeIasZoneClusterReadZoneIdAttribute(endPointId); }
 
     // Global Response: ReadAttributesResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -4319,7 +4999,8 @@ public:
         ChipLogProgress(chipTool, "IdentifyQueryResponse (0x00):");
 
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "timeout", chip::Encoding::LittleEndian::Read16(message)); // uint16
+        uint16_t timeout = chip::Encoding::LittleEndian::Read16(message); // uint16
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "timeout", timeout);
 
         return success;
     }
@@ -4337,9 +5018,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeIdentifyClusterIdentifyCommand(buffer->Start(), bufferSize, endPointId, mIdentifyTime);
+        return encodeIdentifyClusterIdentifyCommand(endPointId, mIdentifyTime);
     }
 
     // Global Response: DefaultResponse
@@ -4361,10 +5042,7 @@ class IdentifyIdentifyQuery : public ModelCommand
 public:
     IdentifyIdentifyQuery() : ModelCommand("identify-query", kIdentifyClusterId, 0x01) { ModelCommand::AddArguments(); }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeIdentifyClusterIdentifyQueryCommand(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeIdentifyClusterIdentifyQueryCommand(endPointId); }
 
     // Global Response: DefaultResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -4382,6 +5060,24 @@ public:
 };
 
 /*
+ * Discover attributes
+ */
+class DiscoverIdentifyAttributes : public ModelCommand
+{
+public:
+    DiscoverIdentifyAttributes() : ModelCommand("discover", kIdentifyClusterId, 0x0c) { ModelCommand::AddArguments(); }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeIdentifyClusterDiscoverAttributes(endPointId); }
+
+    // Global Response: DiscoverAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        DiscoverAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
  * Attribute IdentifyTime
  */
 class ReadIdentifyIdentifyTime : public ModelCommand
@@ -4393,9 +5089,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeIdentifyClusterReadIdentifyTimeAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeIdentifyClusterReadIdentifyTimeAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -4441,10 +5137,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeLevelClusterMoveCommand(buffer->Start(), bufferSize, endPointId, mMoveMode, mRate, mOptionsMask,
-                                             mOptionsOverride);
+        return encodeLevelControlClusterMoveCommand(endPointId, mMoveMode, mRate, mOptionsMask, mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -4476,10 +5171,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeLevelClusterMoveToLevelCommand(buffer->Start(), bufferSize, endPointId, mLevel, mTransitionTime, mOptionsMask,
-                                                    mOptionsOverride);
+        return encodeLevelControlClusterMoveToLevelCommand(endPointId, mLevel, mTransitionTime, mOptionsMask, mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -4506,15 +5200,12 @@ public:
     {
         AddArgument("level", 0, UINT8_MAX, &mLevel);
         AddArgument("transitionTime", 0, UINT16_MAX, &mTransitionTime);
-        AddArgument("optionsMask", 0, UINT8_MAX, &mOptionsMask);
-        AddArgument("optionsOverride", 0, UINT8_MAX, &mOptionsOverride);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeLevelClusterMoveToLevelWithOnOffCommand(buffer->Start(), bufferSize, endPointId, mLevel, mTransitionTime,
-                                                             mOptionsMask, mOptionsOverride);
+        return encodeLevelControlClusterMoveToLevelWithOnOffCommand(endPointId, mLevel, mTransitionTime);
     }
 
     // Global Response: DefaultResponse
@@ -4527,8 +5218,6 @@ public:
 private:
     uint8_t mLevel;
     uint16_t mTransitionTime;
-    uint8_t mOptionsMask;
-    uint8_t mOptionsOverride;
 };
 
 /*
@@ -4541,15 +5230,12 @@ public:
     {
         AddArgument("moveMode", 0, UINT8_MAX, &mMoveMode);
         AddArgument("rate", 0, UINT8_MAX, &mRate);
-        AddArgument("optionsMask", 0, UINT8_MAX, &mOptionsMask);
-        AddArgument("optionsOverride", 0, UINT8_MAX, &mOptionsOverride);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeLevelClusterMoveWithOnOffCommand(buffer->Start(), bufferSize, endPointId, mMoveMode, mRate, mOptionsMask,
-                                                      mOptionsOverride);
+        return encodeLevelControlClusterMoveWithOnOffCommand(endPointId, mMoveMode, mRate);
     }
 
     // Global Response: DefaultResponse
@@ -4562,8 +5248,6 @@ public:
 private:
     uint8_t mMoveMode;
     uint8_t mRate;
-    uint8_t mOptionsMask;
-    uint8_t mOptionsOverride;
 };
 
 /*
@@ -4582,10 +5266,10 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeLevelClusterStepCommand(buffer->Start(), bufferSize, endPointId, mStepMode, mStepSize, mTransitionTime,
-                                             mOptionsMask, mOptionsOverride);
+        return encodeLevelControlClusterStepCommand(endPointId, mStepMode, mStepSize, mTransitionTime, mOptionsMask,
+                                                    mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -4614,15 +5298,12 @@ public:
         AddArgument("stepMode", 0, UINT8_MAX, &mStepMode);
         AddArgument("stepSize", 0, UINT8_MAX, &mStepSize);
         AddArgument("transitionTime", 0, UINT16_MAX, &mTransitionTime);
-        AddArgument("optionsMask", 0, UINT8_MAX, &mOptionsMask);
-        AddArgument("optionsOverride", 0, UINT8_MAX, &mOptionsOverride);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeLevelClusterStepWithOnOffCommand(buffer->Start(), bufferSize, endPointId, mStepMode, mStepSize,
-                                                      mTransitionTime, mOptionsMask, mOptionsOverride);
+        return encodeLevelControlClusterStepWithOnOffCommand(endPointId, mStepMode, mStepSize, mTransitionTime);
     }
 
     // Global Response: DefaultResponse
@@ -4636,8 +5317,6 @@ private:
     uint8_t mStepMode;
     uint8_t mStepSize;
     uint16_t mTransitionTime;
-    uint8_t mOptionsMask;
-    uint8_t mOptionsOverride;
 };
 
 /*
@@ -4653,9 +5332,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeLevelClusterStopCommand(buffer->Start(), bufferSize, endPointId, mOptionsMask, mOptionsOverride);
+        return encodeLevelControlClusterStopCommand(endPointId, mOptionsMask, mOptionsOverride);
     }
 
     // Global Response: DefaultResponse
@@ -4676,16 +5355,11 @@ private:
 class LevelStopWithOnOff : public ModelCommand
 {
 public:
-    LevelStopWithOnOff() : ModelCommand("stop-with-on-off", kLevelClusterId, 0x07)
-    {
-        AddArgument("optionsMask", 0, UINT8_MAX, &mOptionsMask);
-        AddArgument("optionsOverride", 0, UINT8_MAX, &mOptionsOverride);
-        ModelCommand::AddArguments();
-    }
+    LevelStopWithOnOff() : ModelCommand("stop-with-on-off", kLevelClusterId, 0x07) { ModelCommand::AddArguments(); }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeLevelClusterStopWithOnOffCommand(buffer->Start(), bufferSize, endPointId, mOptionsMask, mOptionsOverride);
+        return encodeLevelControlClusterStopWithOnOffCommand(endPointId);
     }
 
     // Global Response: DefaultResponse
@@ -4694,10 +5368,27 @@ public:
         DefaultResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
+};
 
-private:
-    uint8_t mOptionsMask;
-    uint8_t mOptionsOverride;
+/*
+ * Discover attributes
+ */
+class DiscoverLevelAttributes : public ModelCommand
+{
+public:
+    DiscoverLevelAttributes() : ModelCommand("discover", kLevelClusterId, 0x0c) { ModelCommand::AddArguments(); }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeLevelControlClusterDiscoverAttributes(endPointId);
+    }
+
+    // Global Response: DiscoverAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        DiscoverAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
 };
 
 /*
@@ -4712,9 +5403,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeLevelClusterReadCurrentLevelAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeLevelControlClusterReadCurrentLevelAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -4723,6 +5414,36 @@ public:
         ReadAttributesResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
+};
+
+class ReportLevelCurrentLevel : public ModelCommand
+{
+public:
+    ReportLevelCurrentLevel() : ModelCommand("report", kLevelClusterId, 0x06)
+    {
+        AddArgument("attr-name", "current-level");
+        AddArgument("min-interval", 0, UINT16_MAX, &mMinInterval);
+        AddArgument("max-interval", 0, UINT16_MAX, &mMaxInterval);
+        AddArgument("change", 0, UINT8_MAX, &mChange);
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeLevelControlClusterReportCurrentLevelAttribute(endPointId, mMinInterval, mMaxInterval, mChange);
+    }
+
+    // Global Response: ConfigureReportingResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ConfigureReportingResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+
+private:
+    uint16_t mMinInterval;
+    uint16_t mMaxInterval;
+    uint8_t mChange;
 };
 
 /*----------------------------------------------------------------------------*\
@@ -4748,10 +5469,7 @@ class OnOffOff : public ModelCommand
 public:
     OnOffOff() : ModelCommand("off", kOnOffClusterId, 0x00) { ModelCommand::AddArguments(); }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeOnOffClusterOffCommand(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeOnOffClusterOffCommand(endPointId); }
 
     // Global Response: DefaultResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -4769,10 +5487,7 @@ class OnOffOn : public ModelCommand
 public:
     OnOffOn() : ModelCommand("on", kOnOffClusterId, 0x01) { ModelCommand::AddArguments(); }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeOnOffClusterOnCommand(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeOnOffClusterOnCommand(endPointId); }
 
     // Global Response: DefaultResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -4790,15 +5505,30 @@ class OnOffToggle : public ModelCommand
 public:
     OnOffToggle() : ModelCommand("toggle", kOnOffClusterId, 0x02) { ModelCommand::AddArguments(); }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeOnOffClusterToggleCommand(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeOnOffClusterToggleCommand(endPointId); }
 
     // Global Response: DefaultResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
     {
         DefaultResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
+ * Discover attributes
+ */
+class DiscoverOnOffAttributes : public ModelCommand
+{
+public:
+    DiscoverOnOffAttributes() : ModelCommand("discover", kOnOffClusterId, 0x0c) { ModelCommand::AddArguments(); }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeOnOffClusterDiscoverAttributes(endPointId); }
+
+    // Global Response: DiscoverAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        DiscoverAttributesResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
 };
@@ -4815,10 +5545,7 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeOnOffClusterReadOnOffAttribute(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeOnOffClusterReadOnOffAttribute(endPointId); }
 
     // Global Response: ReadAttributesResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -4826,6 +5553,34 @@ public:
         ReadAttributesResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
+};
+
+class ReportOnOffOnOff : public ModelCommand
+{
+public:
+    ReportOnOffOnOff() : ModelCommand("report", kOnOffClusterId, 0x06)
+    {
+        AddArgument("attr-name", "on-off");
+        AddArgument("min-interval", 0, UINT16_MAX, &mMinInterval);
+        AddArgument("max-interval", 0, UINT16_MAX, &mMaxInterval);
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeOnOffClusterReportOnOffAttribute(endPointId, mMinInterval, mMaxInterval);
+    }
+
+    // Global Response: ConfigureReportingResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ConfigureReportingResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+
+private:
+    uint16_t mMinInterval;
+    uint16_t mMaxInterval;
 };
 
 /*----------------------------------------------------------------------------*\
@@ -4873,10 +5628,14 @@ public:
         CHECK_MESSAGE_LENGTH(1);
         uint8_t status = chip::Encoding::Read8(message); // zclStatus
         success        = CheckStatus(status);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", chip::Encoding::LittleEndian::Read16(message)); // SGroupId
+        uint16_t groupId = chip::Encoding::LittleEndian::Read16(message); // SGroupId
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", groupId);
+
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "sceneId", chip::Encoding::Read8(message)); // uint8
+        uint8_t sceneId = chip::Encoding::Read8(message); // uint8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "sceneId", sceneId);
 
         return success;
     }
@@ -4898,15 +5657,21 @@ public:
         CHECK_MESSAGE_LENGTH(1);
         uint8_t status = chip::Encoding::Read8(message); // zclStatus
         success        = CheckStatus(status);
+
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "capacity", chip::Encoding::Read8(message)); // uint8
+        uint8_t capacity = chip::Encoding::Read8(message); // uint8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "capacity", capacity);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", chip::Encoding::LittleEndian::Read16(message)); // SGroupId
+        uint16_t groupId = chip::Encoding::LittleEndian::Read16(message); // SGroupId
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", groupId);
+
         // uint8_t uint8[]
         while (messageLen)
         {
             CHECK_MESSAGE_LENGTH(1);
-            ChipLogProgress(chipTool, "  %s: 0x%02x", "sceneList", chip::Encoding::Read8(message)); // uint8
+            uint8_t sceneList = chip::Encoding::Read8(message); // uint8
+            ChipLogProgress(chipTool, "  %s: 0x%02x", "sceneList", sceneList);
         }
 
         return success;
@@ -4929,8 +5694,10 @@ public:
         CHECK_MESSAGE_LENGTH(1);
         uint8_t status = chip::Encoding::Read8(message); // zclStatus
         success        = CheckStatus(status);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", chip::Encoding::LittleEndian::Read16(message)); // SGroupId
+        uint16_t groupId = chip::Encoding::LittleEndian::Read16(message); // SGroupId
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", groupId);
 
         return success;
     }
@@ -4952,10 +5719,14 @@ public:
         CHECK_MESSAGE_LENGTH(1);
         uint8_t status = chip::Encoding::Read8(message); // zclStatus
         success        = CheckStatus(status);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", chip::Encoding::LittleEndian::Read16(message)); // SGroupId
+        uint16_t groupId = chip::Encoding::LittleEndian::Read16(message); // SGroupId
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", groupId);
+
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "sceneId", chip::Encoding::Read8(message)); // uint8
+        uint8_t sceneId = chip::Encoding::Read8(message); // uint8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "sceneId", sceneId);
 
         return success;
     }
@@ -4977,10 +5748,14 @@ public:
         CHECK_MESSAGE_LENGTH(1);
         uint8_t status = chip::Encoding::Read8(message); // zclStatus
         success        = CheckStatus(status);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", chip::Encoding::LittleEndian::Read16(message)); // SGroupId
+        uint16_t groupId = chip::Encoding::LittleEndian::Read16(message); // SGroupId
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", groupId);
+
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "sceneId", chip::Encoding::Read8(message)); // uint8
+        uint8_t sceneId = chip::Encoding::Read8(message); // uint8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "sceneId", sceneId);
 
         return success;
     }
@@ -5002,12 +5777,19 @@ public:
         CHECK_MESSAGE_LENGTH(1);
         uint8_t status = chip::Encoding::Read8(message); // zclStatus
         success        = CheckStatus(status);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", chip::Encoding::LittleEndian::Read16(message)); // SGroupId
+        uint16_t groupId = chip::Encoding::LittleEndian::Read16(message); // SGroupId
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "groupId", groupId);
+
         CHECK_MESSAGE_LENGTH(1);
-        ChipLogProgress(chipTool, "  %s: 0x%02x", "sceneId", chip::Encoding::Read8(message)); // uint8
+        uint8_t sceneId = chip::Encoding::Read8(message); // uint8
+        ChipLogProgress(chipTool, "  %s: 0x%02x", "sceneId", sceneId);
+
         CHECK_MESSAGE_LENGTH(2);
-        ChipLogProgress(chipTool, "  %s: 0x%04x", "transitionTime", chip::Encoding::LittleEndian::Read16(message)); // uint16
+        uint16_t transitionTime = chip::Encoding::LittleEndian::Read16(message); // uint16
+        ChipLogProgress(chipTool, "  %s: 0x%04x", "transitionTime", transitionTime);
+
         CHECK_MESSAGE_LENGTH(1);
         {
             uint8_t sceneNameLen = chip::Encoding::Read8(message);                   // SSceneName
@@ -5018,11 +5800,14 @@ public:
             CHECK_MESSAGE_LENGTH(sceneNameLen);
             message += sceneNameLen;
         }
+
         // struct SExtensionFieldSetList[]
         while (messageLen)
         {
             CHECK_MESSAGE_LENGTH(2);
-            ChipLogProgress(chipTool, "  %s: 0x%04x", "clusterId", chip::Encoding::LittleEndian::Read16(message)); // uint16
+            uint16_t clusterId = chip::Encoding::LittleEndian::Read16(message); // uint16
+            ChipLogProgress(chipTool, "  %s: 0x%04x", "clusterId", clusterId);
+
             CHECK_MESSAGE_LENGTH(1);
             {
                 uint8_t extensionFieldSetLen = chip::Encoding::Read8(message);                           // octstr
@@ -5054,14 +5839,15 @@ public:
         // extensionFieldSets is an array, but since chip-tool does not support variable
         // number of arguments, only a single instance is supported.
         AddArgument("clusterId", 0, UINT16_MAX, &mClusterId);
-        AddArgument("extensionFieldSet", &mExtensionFieldSet);
+        AddArgument("length", 0, UINT8_MAX, &mLength);
+        AddArgument("value", 0, UINT8_MAX, &mValue);
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeScenesClusterAddSceneCommand(buffer->Start(), bufferSize, endPointId, mGroupID, mSceneID, mTransitionTime,
-                                                  mSceneName, mClusterId, mExtensionFieldSet);
+        return encodeScenesClusterAddSceneCommand(endPointId, mGroupID, mSceneID, mTransitionTime, mSceneName, mClusterId, mLength,
+                                                  mValue);
     }
 
     // Global Response: DefaultResponse
@@ -5084,7 +5870,8 @@ private:
     uint16_t mTransitionTime;
     char * mSceneName;
     uint16_t mClusterId;
-    char * mExtensionFieldSet;
+    uint8_t mLength;
+    uint8_t mValue;
 };
 
 /*
@@ -5099,9 +5886,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeScenesClusterGetSceneMembershipCommand(buffer->Start(), bufferSize, endPointId, mGroupID);
+        return encodeScenesClusterGetSceneMembershipCommand(endPointId, mGroupID);
     }
 
     // Global Response: DefaultResponse
@@ -5136,9 +5923,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeScenesClusterRecallSceneCommand(buffer->Start(), bufferSize, endPointId, mGroupID, mSceneID, mTransitionTime);
+        return encodeScenesClusterRecallSceneCommand(endPointId, mGroupID, mSceneID, mTransitionTime);
     }
 
     // Global Response: DefaultResponse
@@ -5166,9 +5953,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeScenesClusterRemoveAllScenesCommand(buffer->Start(), bufferSize, endPointId, mGroupID);
+        return encodeScenesClusterRemoveAllScenesCommand(endPointId, mGroupID);
     }
 
     // Global Response: DefaultResponse
@@ -5202,9 +5989,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeScenesClusterRemoveSceneCommand(buffer->Start(), bufferSize, endPointId, mGroupID, mSceneID);
+        return encodeScenesClusterRemoveSceneCommand(endPointId, mGroupID, mSceneID);
     }
 
     // Global Response: DefaultResponse
@@ -5239,9 +6026,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeScenesClusterStoreSceneCommand(buffer->Start(), bufferSize, endPointId, mGroupID, mSceneID);
+        return encodeScenesClusterStoreSceneCommand(endPointId, mGroupID, mSceneID);
     }
 
     // Global Response: DefaultResponse
@@ -5276,9 +6063,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeScenesClusterViewSceneCommand(buffer->Start(), bufferSize, endPointId, mGroupID, mSceneID);
+        return encodeScenesClusterViewSceneCommand(endPointId, mGroupID, mSceneID);
     }
 
     // Global Response: DefaultResponse
@@ -5301,6 +6088,24 @@ private:
 };
 
 /*
+ * Discover attributes
+ */
+class DiscoverScenesAttributes : public ModelCommand
+{
+public:
+    DiscoverScenesAttributes() : ModelCommand("discover", kScenesClusterId, 0x0c) { ModelCommand::AddArguments(); }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeScenesClusterDiscoverAttributes(endPointId); }
+
+    // Global Response: DiscoverAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        DiscoverAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
  * Attribute SceneCount
  */
 class ReadScenesSceneCount : public ModelCommand
@@ -5312,10 +6117,7 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeScenesClusterReadSceneCountAttribute(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeScenesClusterReadSceneCountAttribute(endPointId); }
 
     // Global Response: ReadAttributesResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -5337,9 +6139,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeScenesClusterReadCurrentSceneAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeScenesClusterReadCurrentSceneAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -5362,9 +6164,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeScenesClusterReadCurrentGroupAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeScenesClusterReadCurrentGroupAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -5387,10 +6189,7 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
-    {
-        return encodeScenesClusterReadSceneValidAttribute(buffer->Start(), bufferSize, endPointId);
-    }
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override { return encodeScenesClusterReadSceneValidAttribute(endPointId); }
 
     // Global Response: ReadAttributesResponse
     bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
@@ -5412,9 +6211,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeScenesClusterReadNameSupportAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeScenesClusterReadNameSupportAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -5440,6 +6239,30 @@ public:
 \*----------------------------------------------------------------------------*/
 
 /*
+ * Discover attributes
+ */
+class DiscoverTemperatureMeasurementAttributes : public ModelCommand
+{
+public:
+    DiscoverTemperatureMeasurementAttributes() : ModelCommand("discover", kTempMeasurementClusterId, 0x0c)
+    {
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeTemperatureMeasurementClusterDiscoverAttributes(endPointId);
+    }
+
+    // Global Response: DiscoverAttributesResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        DiscoverAttributesResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+};
+
+/*
  * Attribute MeasuredValue
  */
 class ReadTemperatureMeasurementMeasuredValue : public ModelCommand
@@ -5451,9 +6274,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeTemperatureMeasurementClusterReadMeasuredValueAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeTemperatureMeasurementClusterReadMeasuredValueAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -5462,6 +6285,36 @@ public:
         ReadAttributesResponse response;
         return response.HandleCommandResponse(commandId, message, messageLen);
     }
+};
+
+class ReportTemperatureMeasurementMeasuredValue : public ModelCommand
+{
+public:
+    ReportTemperatureMeasurementMeasuredValue() : ModelCommand("report", kTempMeasurementClusterId, 0x06)
+    {
+        AddArgument("attr-name", "measured-value");
+        AddArgument("min-interval", 0, UINT16_MAX, &mMinInterval);
+        AddArgument("max-interval", 0, UINT16_MAX, &mMaxInterval);
+        AddArgument("change", INT16_MIN, INT16_MAX, &mChange);
+        ModelCommand::AddArguments();
+    }
+
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
+    {
+        return encodeTemperatureMeasurementClusterReportMeasuredValueAttribute(endPointId, mMinInterval, mMaxInterval, mChange);
+    }
+
+    // Global Response: ConfigureReportingResponse
+    bool HandleGlobalResponse(uint8_t commandId, uint8_t * message, uint16_t messageLen) const override
+    {
+        ConfigureReportingResponse response;
+        return response.HandleCommandResponse(commandId, message, messageLen);
+    }
+
+private:
+    uint16_t mMinInterval;
+    uint16_t mMaxInterval;
+    int16_t mChange;
 };
 
 /*
@@ -5476,9 +6329,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeTemperatureMeasurementClusterReadMinMeasuredValueAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeTemperatureMeasurementClusterReadMinMeasuredValueAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -5501,9 +6354,9 @@ public:
         ModelCommand::AddArguments();
     }
 
-    uint16_t EncodeCommand(PacketBuffer * buffer, uint16_t bufferSize, uint8_t endPointId) override
+    PacketBufferHandle EncodeCommand(uint8_t endPointId) override
     {
-        return encodeTemperatureMeasurementClusterReadMaxMeasuredValueAttribute(buffer->Start(), bufferSize, endPointId);
+        return encodeTemperatureMeasurementClusterReadMaxMeasuredValueAttribute(endPointId);
     }
 
     // Global Response: ReadAttributesResponse
@@ -5522,9 +6375,10 @@ void registerClusterBarrierControl(Commands & commands)
     const char * clusterName = "BarrierControl";
 
     commands_list clusterCommands = {
-        make_unique<BarrierControlGoToPercent>(),      make_unique<BarrierControlStop>(),
-        make_unique<ReadBarrierControlMovingState>(),  make_unique<ReadBarrierControlSafetyStatus>(),
-        make_unique<ReadBarrierControlCapabilities>(), make_unique<ReadBarrierControlBarrierPosition>(),
+        make_unique<BarrierControlGoToPercent>(),         make_unique<BarrierControlStop>(),
+        make_unique<DiscoverBarrierControlAttributes>(),  make_unique<ReadBarrierControlMovingState>(),
+        make_unique<ReadBarrierControlSafetyStatus>(),    make_unique<ReadBarrierControlCapabilities>(),
+        make_unique<ReadBarrierControlBarrierPosition>(),
     };
 
     commands.Register(clusterName, clusterCommands);
@@ -5535,9 +6389,8 @@ void registerClusterBasic(Commands & commands)
     const char * clusterName = "Basic";
 
     commands_list clusterCommands = {
-        make_unique<BasicResetToFactoryDefaults>(),
-        make_unique<ReadBasicZCLVersion>(),
-        make_unique<ReadBasicPowerSource>(),
+        make_unique<BasicResetToFactoryDefaults>(), make_unique<BasicMfgSpecificPing>(), make_unique<DiscoverBasicAttributes>(),
+        make_unique<ReadBasicZclVersion>(),         make_unique<ReadBasicPowerSource>(),
     };
 
     commands.Register(clusterName, clusterCommands);
@@ -5562,14 +6415,19 @@ void registerClusterColorControl(Commands & commands)
         make_unique<ColorControlStepHue>(),
         make_unique<ColorControlStepSaturation>(),
         make_unique<ColorControlStopMoveStep>(),
+        make_unique<DiscoverColorControlAttributes>(),
         make_unique<ReadColorControlCurrentHue>(),
+        make_unique<ReportColorControlCurrentHue>(),
         make_unique<ReadColorControlCurrentSaturation>(),
+        make_unique<ReportColorControlCurrentSaturation>(),
         make_unique<ReadColorControlRemainingTime>(),
         make_unique<ReadColorControlCurrentX>(),
+        make_unique<ReportColorControlCurrentX>(),
         make_unique<ReadColorControlCurrentY>(),
-        make_unique<ReadColorControlColorTemperatureMireds>(),
+        make_unique<ReportColorControlCurrentY>(),
+        make_unique<ReadColorControlColorTemperature>(),
+        make_unique<ReportColorControlColorTemperature>(),
         make_unique<ReadColorControlColorMode>(),
-        make_unique<ReadColorControlOptions>(),
         make_unique<ReadColorControlNumberOfPrimaries>(),
         make_unique<ReadColorControlPrimary1X>(),
         make_unique<ReadColorControlPrimary1Y>(),
@@ -5594,11 +6452,9 @@ void registerClusterColorControl(Commands & commands)
         make_unique<ReadColorControlColorLoopActive>(),
         make_unique<ReadColorControlColorLoopDirection>(),
         make_unique<ReadColorControlColorLoopTime>(),
-        make_unique<ReadColorControlColorLoopStartEnhancedHue>(),
-        make_unique<ReadColorControlColorLoopStoredEnhancedHue>(),
         make_unique<ReadColorControlColorCapabilities>(),
-        make_unique<ReadColorControlColorTempPhysicalMinMireds>(),
-        make_unique<ReadColorControlColorTempPhysicalMaxMireds>(),
+        make_unique<ReadColorControlColorTempPhysicalMin>(),
+        make_unique<ReadColorControlColorTempPhysicalMax>(),
         make_unique<ReadColorControlCoupleColorTempToLevelMinMireds>(),
         make_unique<ReadColorControlStartUpColorTemperatureMireds>(),
     };
@@ -5611,18 +6467,32 @@ void registerClusterDoorLock(Commands & commands)
     const char * clusterName = "DoorLock";
 
     commands_list clusterCommands = {
-        make_unique<DoorLockClearAllPINCodes>(),     make_unique<DoorLockClearAllRFIDCodes>(),
-        make_unique<DoorLockClearHolidaySchedule>(), make_unique<DoorLockClearPINCode>(),
-        make_unique<DoorLockClearRFIDCode>(),        make_unique<DoorLockClearWeekdaySchedule>(),
-        make_unique<DoorLockClearYearDaySchedule>(), make_unique<DoorLockGetHolidaySchedule>(),
-        make_unique<DoorLockGetPINCode>(),           make_unique<DoorLockGetRFIDCode>(),
-        make_unique<DoorLockGetUserType>(),          make_unique<DoorLockGetWeekdaySchedule>(),
-        make_unique<DoorLockGetYearDaySchedule>(),   make_unique<DoorLockLockDoor>(),
-        make_unique<DoorLockSetHolidaySchedule>(),   make_unique<DoorLockSetPINCode>(),
-        make_unique<DoorLockSetRFIDCode>(),          make_unique<DoorLockSetUserType>(),
-        make_unique<DoorLockSetWeekdaySchedule>(),   make_unique<DoorLockSetYearDaySchedule>(),
-        make_unique<DoorLockUnlockDoor>(),           make_unique<DoorLockUnlockWithTimeout>(),
-        make_unique<ReadDoorLockLockState>(),        make_unique<ReadDoorLockLockType>(),
+        make_unique<DoorLockClearAllPins>(),
+        make_unique<DoorLockClearAllRfids>(),
+        make_unique<DoorLockClearHolidaySchedule>(),
+        make_unique<DoorLockClearPin>(),
+        make_unique<DoorLockClearRfid>(),
+        make_unique<DoorLockClearWeekdaySchedule>(),
+        make_unique<DoorLockClearYeardaySchedule>(),
+        make_unique<DoorLockGetHolidaySchedule>(),
+        make_unique<DoorLockGetPin>(),
+        make_unique<DoorLockGetRfid>(),
+        make_unique<DoorLockGetUserType>(),
+        make_unique<DoorLockGetWeekdaySchedule>(),
+        make_unique<DoorLockGetYeardaySchedule>(),
+        make_unique<DoorLockLockDoor>(),
+        make_unique<DoorLockSetHolidaySchedule>(),
+        make_unique<DoorLockSetPin>(),
+        make_unique<DoorLockSetRfid>(),
+        make_unique<DoorLockSetUserType>(),
+        make_unique<DoorLockSetWeekdaySchedule>(),
+        make_unique<DoorLockSetYeardaySchedule>(),
+        make_unique<DoorLockUnlockDoor>(),
+        make_unique<DoorLockUnlockWithTimeout>(),
+        make_unique<DiscoverDoorLockAttributes>(),
+        make_unique<ReadDoorLockLockState>(),
+        make_unique<ReportDoorLockLockState>(),
+        make_unique<ReadDoorLockLockType>(),
         make_unique<ReadDoorLockActuatorEnabled>(),
     };
 
@@ -5634,9 +6504,23 @@ void registerClusterGroups(Commands & commands)
     const char * clusterName = "Groups";
 
     commands_list clusterCommands = {
-        make_unique<GroupsAddGroup>(),        make_unique<GroupsAddGroupIfIdentifying>(), make_unique<GroupsGetGroupMembership>(),
-        make_unique<GroupsRemoveAllGroups>(), make_unique<GroupsRemoveGroup>(),           make_unique<GroupsViewGroup>(),
-        make_unique<ReadGroupsNameSupport>(),
+        make_unique<GroupsAddGroup>(),           make_unique<GroupsAddGroupIfIdentifying>(),
+        make_unique<GroupsGetGroupMembership>(), make_unique<GroupsRemoveAllGroups>(),
+        make_unique<GroupsRemoveGroup>(),        make_unique<GroupsViewGroup>(),
+        make_unique<DiscoverGroupsAttributes>(), make_unique<ReadGroupsNameSupport>(),
+    };
+
+    commands.Register(clusterName, clusterCommands);
+}
+
+void registerClusterIasZone(Commands & commands)
+{
+    const char * clusterName = "IasZone";
+
+    commands_list clusterCommands = {
+        make_unique<DiscoverIasZoneAttributes>(), make_unique<ReadIasZoneZoneState>(),     make_unique<ReadIasZoneZoneType>(),
+        make_unique<ReadIasZoneZoneStatus>(),     make_unique<ReadIasZoneIasCieAddress>(), make_unique<WriteIasZoneIasCieAddress>(),
+        make_unique<ReadIasZoneZoneID>(),
     };
 
     commands.Register(clusterName, clusterCommands);
@@ -5649,6 +6533,7 @@ void registerClusterIdentify(Commands & commands)
     commands_list clusterCommands = {
         make_unique<IdentifyIdentify>(),
         make_unique<IdentifyIdentifyQuery>(),
+        make_unique<DiscoverIdentifyAttributes>(),
         make_unique<ReadIdentifyIdentifyTime>(),
     };
 
@@ -5657,12 +6542,20 @@ void registerClusterIdentify(Commands & commands)
 
 void registerClusterLevel(Commands & commands)
 {
-    const char * clusterName = "Level";
+    const char * clusterName = "LevelControl";
 
     commands_list clusterCommands = {
-        make_unique<LevelMove>(),          make_unique<LevelMoveToLevel>(),   make_unique<LevelMoveToLevelWithOnOff>(),
-        make_unique<LevelMoveWithOnOff>(), make_unique<LevelStep>(),          make_unique<LevelStepWithOnOff>(),
-        make_unique<LevelStop>(),          make_unique<LevelStopWithOnOff>(), make_unique<ReadLevelCurrentLevel>(),
+        make_unique<LevelMove>(),
+        make_unique<LevelMoveToLevel>(),
+        make_unique<LevelMoveToLevelWithOnOff>(),
+        make_unique<LevelMoveWithOnOff>(),
+        make_unique<LevelStep>(),
+        make_unique<LevelStepWithOnOff>(),
+        make_unique<LevelStop>(),
+        make_unique<LevelStopWithOnOff>(),
+        make_unique<DiscoverLevelAttributes>(),
+        make_unique<ReadLevelCurrentLevel>(),
+        make_unique<ReportLevelCurrentLevel>(),
     };
 
     commands.Register(clusterName, clusterCommands);
@@ -5673,10 +6566,9 @@ void registerClusterOnOff(Commands & commands)
     const char * clusterName = "OnOff";
 
     commands_list clusterCommands = {
-        make_unique<OnOffOff>(),
-        make_unique<OnOffOn>(),
-        make_unique<OnOffToggle>(),
-        make_unique<ReadOnOffOnOff>(),
+        make_unique<OnOffOff>(),       make_unique<OnOffOn>(),
+        make_unique<OnOffToggle>(),    make_unique<DiscoverOnOffAttributes>(),
+        make_unique<ReadOnOffOnOff>(), make_unique<ReportOnOffOnOff>(),
     };
 
     commands.Register(clusterName, clusterCommands);
@@ -5689,8 +6581,9 @@ void registerClusterScenes(Commands & commands)
     commands_list clusterCommands = {
         make_unique<ScenesAddScene>(),         make_unique<ScenesGetSceneMembership>(), make_unique<ScenesRecallScene>(),
         make_unique<ScenesRemoveAllScenes>(),  make_unique<ScenesRemoveScene>(),        make_unique<ScenesStoreScene>(),
-        make_unique<ScenesViewScene>(),        make_unique<ReadScenesSceneCount>(),     make_unique<ReadScenesCurrentScene>(),
-        make_unique<ReadScenesCurrentGroup>(), make_unique<ReadScenesSceneValid>(),     make_unique<ReadScenesNameSupport>(),
+        make_unique<ScenesViewScene>(),        make_unique<DiscoverScenesAttributes>(), make_unique<ReadScenesSceneCount>(),
+        make_unique<ReadScenesCurrentScene>(), make_unique<ReadScenesCurrentGroup>(),   make_unique<ReadScenesSceneValid>(),
+        make_unique<ReadScenesNameSupport>(),
     };
 
     commands.Register(clusterName, clusterCommands);
@@ -5701,8 +6594,8 @@ void registerClusterTempMeasurement(Commands & commands)
     const char * clusterName = "TemperatureMeasurement";
 
     commands_list clusterCommands = {
-        make_unique<ReadTemperatureMeasurementMeasuredValue>(),
-        make_unique<ReadTemperatureMeasurementMinMeasuredValue>(),
+        make_unique<DiscoverTemperatureMeasurementAttributes>(),   make_unique<ReadTemperatureMeasurementMeasuredValue>(),
+        make_unique<ReportTemperatureMeasurementMeasuredValue>(),  make_unique<ReadTemperatureMeasurementMinMeasuredValue>(),
         make_unique<ReadTemperatureMeasurementMaxMeasuredValue>(),
     };
 
@@ -5716,6 +6609,7 @@ void registerClusters(Commands & commands)
     registerClusterColorControl(commands);
     registerClusterDoorLock(commands);
     registerClusterGroups(commands);
+    registerClusterIasZone(commands);
     registerClusterIdentify(commands);
     registerClusterLevel(commands);
     registerClusterOnOff(commands);

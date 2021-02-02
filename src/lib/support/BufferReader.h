@@ -59,6 +59,18 @@ public:
     uint16_t OctetsRead() const { return static_cast<uint16_t>(mReadPtr - mBufStart); }
 
     /**
+     * Number of octets we have remaining to read.  Can be useful for logging.
+     */
+    uint16_t Remaining() const { return mAvailable; }
+
+    /**
+     * Test whether we have at least the given number of octets left to read.
+     * This takes a size_t, not uint16_t, to make life a bit simpler for
+     * consumers and avoid casting.
+     */
+    bool HasAtLeast(size_t octets) const { return octets <= Remaining(); }
+
+    /**
      * The reader status.  Once the status becomes a failure status, all later
      * read operations become no-ops and the status continues to be a failure
      * status.
@@ -79,7 +91,7 @@ public:
     CHECK_RETURN_VALUE
     Reader & Read8(uint8_t * dest)
     {
-        Read(dest);
+        RawRead(dest);
         return *this;
     }
 
@@ -96,7 +108,7 @@ public:
     CHECK_RETURN_VALUE
     Reader & Read16(uint16_t * dest)
     {
-        Read(dest);
+        RawRead(dest);
         return *this;
     }
 
@@ -113,7 +125,7 @@ public:
     CHECK_RETURN_VALUE
     Reader & Read32(uint32_t * dest)
     {
-        Read(dest);
+        RawRead(dest);
         return *this;
     }
 
@@ -130,17 +142,19 @@ public:
     CHECK_RETURN_VALUE
     Reader & Read64(uint64_t * dest)
     {
-        Read(dest);
+        RawRead(dest);
         return *this;
     }
 
-protected:
     /**
      * Helper for our various APIs so we don't have to write out various logic
-     * multiple times.
+     * multiple times.  This is public so that consumers that want to read into
+     * whatever size a logical thing they are reading into has don't have to
+     * hardcode the right API.  This is meant for other reader classes that
+     * delegate to this one.
      */
     template <typename T>
-    void Read(T * retval);
+    void RawRead(T * retval);
 
 private:
     /**

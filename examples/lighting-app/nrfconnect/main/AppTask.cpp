@@ -27,7 +27,13 @@
 #include "Service.h"
 #include "ThreadUtil.h"
 
+#ifdef CONFIG_CHIP_NFC_COMMISSIONING
+#include "NFCWidget.h"
+#endif
+
 #include "attribute-storage.h"
+#include "gen/attribute-id.h"
+#include "gen/attribute-type.h"
 #include "gen/cluster-id.h"
 
 #include <platform/CHIPDeviceLayer.h>
@@ -59,6 +65,10 @@ k_timer sFunctionTimer;
 LEDWidget sStatusLED;
 LEDWidget sUnusedLED;
 LEDWidget sUnusedLED_1;
+
+#ifdef CONFIG_CHIP_NFC_COMMISSIONING
+NFCWidget sNFC;
+#endif
 
 bool sIsThreadProvisioned     = false;
 bool sIsThreadEnabled         = false;
@@ -94,7 +104,7 @@ int AppTask::Init()
     k_timer_init(&sFunctionTimer, &AppTask::TimerEventHandler, nullptr);
     k_timer_user_data_set(&sFunctionTimer, this);
 
-    ret = LightingMgr().Init(LIGHTING_GPIO_DEVICE_NAME, LIGHTING_GPIO_PIN);
+    ret = LightingMgr().Init(LIGHTING_PWM_DEVICE, LIGHTING_PWM_CHANNEL);
     if (ret != 0)
         return ret;
 
@@ -103,6 +113,17 @@ int AppTask::Init()
     // Init ZCL Data Model and start server
     InitServer();
     PrintQRCode(chip::RendezvousInformationFlags::kBLE);
+
+#ifdef CONFIG_CHIP_NFC_COMMISSIONING
+    ret = sNFC.Init(ConnectivityMgr());
+    if (ret)
+    {
+        LOG_ERR("NFC initialization failed");
+        return ret;
+    }
+
+    PlatformMgr().AddEventHandler(AppTask::ThreadProvisioningHandler, 0);
+#endif
 
     return 0;
 }
@@ -213,7 +234,7 @@ void AppTask::LightingActionEventHandler(AppEvent * aEvent)
         actor  = AppEvent::kEventType_Button;
     }
 
-    if (action != LightingManager::INVALID_ACTION && !LightingMgr().InitiateAction(action, actor))
+    if (action != LightingManager::INVALID_ACTION && !LightingMgr().InitiateAction(action, actor, 0, NULL))
         LOG_INF("Action is already in progress or active.");
 }
 
@@ -357,9 +378,25 @@ void AppTask::StartBLEAdvertisementHandler(AppEvent * aEvent)
     if (aEvent->ButtonEvent.PinNo != BLE_ADVERTISEMENT_START_BUTTON)
         return;
 
+    if (!sNFC.IsTagEmulationStarted())
+    {
+        if (!(GetAppTask().StartNFCTag() < 0))
+        {
+            LOG_INF("Started NFC Tag emulation");
+        }
+        else
+        {
+            LOG_ERR("Starting NFC Tag failed");
+        }
+    }
+    else
+    {
+        LOG_INF("NFC Tag emulation is already started");
+    }
+
     if (!ConnectivityMgr().IsBLEAdvertisingEnabled())
     {
-        ConnectivityMgr().SetBLEAdvertisingEnabled(ConnectivityManager::kCHIPoBLEServiceMode_Enabled);
+        ConnectivityMgr().SetBLEAdvertisingEnabled(true);
         LOG_INF("Enabled BLE Advertisement");
     }
     else
@@ -367,6 +404,21 @@ void AppTask::StartBLEAdvertisementHandler(AppEvent * aEvent)
         LOG_INF("BLE Advertisement is already enabled");
     }
 }
+
+#ifdef CONFIG_CHIP_NFC_COMMISSIONING
+void AppTask::ThreadProvisioningHandler(const ChipDeviceEvent * event, intptr_t arg)
+{
+    ARG_UNUSED(arg);
+    if ((event->Type == DeviceEventType::kServiceProvisioningChange) && ConnectivityMgr().IsThreadProvisioned())
+    {
+        const int result = sNFC.StopTagEmulation();
+        if (result)
+        {
+            LOG_ERR("Stopping NFC Tag emulation failed");
+        }
+    }
+}
+#endif
 
 void AppTask::CancelTimer()
 {
@@ -380,6 +432,24 @@ void AppTask::StartTimer(uint32_t aTimeoutInMs)
     mFunctionTimerActive = true;
 }
 
+#ifdef CONFIG_CHIP_NFC_COMMISSIONING
+int AppTask::StartNFCTag()
+{
+    // Get QR Code and emulate its content using NFC tag
+    uint32_t setupPinCode;
+    std::string QRCode;
+
+    int result = GetQRCode(setupPinCode, QRCode, chip::RendezvousInformationFlags::kBLE);
+    VerifyOrExit(!result, ChipLogError(AppServer, "Getting QR code payload failed"));
+
+    result = sNFC.StartTagEmulation(QRCode.c_str(), QRCode.size());
+    VerifyOrExit(result >= 0, ChipLogError(AppServer, "Starting NFC Tag emulation failed"));
+
+exit:
+    return result;
+}
+#endif
+
 void AppTask::ActionInitiated(LightingManager::Action_t aAction, int32_t aActor)
 {
     if (aAction == LightingManager::ON_ACTION)
@@ -389,6 +459,10 @@ void AppTask::ActionInitiated(LightingManager::Action_t aAction, int32_t aActor)
     else if (aAction == LightingManager::OFF_ACTION)
     {
         LOG_INF("Turn Off Action has been initiated");
+    }
+    else if (aAction == LightingManager::LEVEL_ACTION)
+    {
+        LOG_INF("Level Action has been initiated");
     }
 }
 
@@ -401,6 +475,10 @@ void AppTask::ActionCompleted(LightingManager::Action_t aAction, int32_t aActor)
     else if (aAction == LightingManager::OFF_ACTION)
     {
         LOG_INF("Turn Off Action has been completed");
+    }
+    else if (aAction == LightingManager::LEVEL_ACTION)
+    {
+        LOG_INF("Level Action has been completed");
     }
 
     if (aActor == AppEvent::kEventType_Button)
@@ -440,13 +518,23 @@ void AppTask::DispatchEvent(AppEvent * aEvent)
 
 void AppTask::UpdateClusterState()
 {
-    uint8_t newValue = LightingMgr().IsTurnedOn();
+    uint8_t onoff = LightingMgr().IsTurnedOn();
 
     // write the new on/off value
-    EmberAfStatus status = emberAfWriteAttribute(1, ZCL_ON_OFF_CLUSTER_ID, ZCL_ON_OFF_ATTRIBUTE_ID, CLUSTER_MASK_SERVER, &newValue,
+    EmberAfStatus status = emberAfWriteAttribute(1, ZCL_ON_OFF_CLUSTER_ID, ZCL_ON_OFF_ATTRIBUTE_ID, CLUSTER_MASK_SERVER, &onoff,
                                                  ZCL_BOOLEAN_ATTRIBUTE_TYPE);
     if (status != EMBER_ZCL_STATUS_SUCCESS)
     {
-        LOG_ERR("Updating on/off %x", status);
+        LOG_ERR("Updating on/off cluster failed: %x", status);
+    }
+
+    uint8_t level = LightingMgr().GetLevel();
+
+    status = emberAfWriteAttribute(1, ZCL_LEVEL_CONTROL_CLUSTER_ID, ZCL_CURRENT_LEVEL_ATTRIBUTE_ID, CLUSTER_MASK_SERVER, &level,
+                                   ZCL_DATA8_ATTRIBUTE_TYPE);
+
+    if (status != EMBER_ZCL_STATUS_SUCCESS)
+    {
+        LOG_ERR("Updating level cluster failed: %x", status);
     }
 }

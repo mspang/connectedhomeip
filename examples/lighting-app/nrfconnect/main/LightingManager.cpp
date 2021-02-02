@@ -20,6 +20,7 @@
 
 #include "AppConfig.h"
 
+#include <drivers/pwm.h>
 #include <logging/log.h>
 #include <zephyr.h>
 
@@ -27,26 +28,20 @@ LOG_MODULE_DECLARE(app);
 
 LightingManager LightingManager::sLight;
 
-int LightingManager::Init(const char * gpioDeviceName, gpio_pin_t gpioPin)
+int LightingManager::Init(const char * pwmDeviceName, uint32_t pwmChannel)
 {
     // We use a gpioPin instead of a LEDWidget here because we want to use PWM
     // and other features instead of just on/off.
 
     mState      = kState_On;
-    mGPIOPin    = gpioPin;
-    mGPIODevice = const_cast<device *>(device_get_binding(gpioDeviceName));
+    mLevel      = kMaxLevel;
+    mPwmDevice  = device_get_binding(pwmDeviceName);
+    mPwmChannel = pwmChannel;
 
-    if (!mGPIODevice)
+    if (!mPwmDevice)
     {
-        LOG_ERR("Cannot find GPIO port %s", log_strdup(gpioDeviceName));
+        LOG_ERR("Cannot find PWM device %s", log_strdup(pwmDeviceName));
         return -ENODEV;
-    }
-
-    int res = gpio_pin_configure(mGPIODevice, mGPIOPin, GPIO_OUTPUT);
-    if (res != 0)
-    {
-        LOG_ERR("Cannot configure GPIO pin");
-        return res;
     }
 
     Set(false);
@@ -59,7 +54,7 @@ void LightingManager::SetCallbacks(LightingCallback_fn aActionInitiated_CB, Ligh
     mActionCompleted_CB = aActionCompleted_CB;
 }
 
-bool LightingManager::InitiateAction(Action_t aAction, int32_t aActor)
+bool LightingManager::InitiateAction(Action_t aAction, int32_t aActor, uint8_t size, uint8_t * value)
 {
     // TODO: this function is called InitiateAction because we want to implement some features such as ramping up here.
     bool action_initiated = false;
@@ -76,6 +71,18 @@ bool LightingManager::InitiateAction(Action_t aAction, int32_t aActor)
         action_initiated = true;
         new_state        = kState_Off;
     }
+    else if (aAction == LEVEL_ACTION && *value != mLevel)
+    {
+        action_initiated = true;
+        if (*value == 0)
+        {
+            new_state = kState_Off;
+        }
+        else
+        {
+            new_state = kState_On;
+        }
+    }
 
     if (action_initiated)
     {
@@ -84,7 +91,14 @@ bool LightingManager::InitiateAction(Action_t aAction, int32_t aActor)
             mActionInitiated_CB(aAction, aActor);
         }
 
-        Set(new_state == kState_On);
+        if (aAction == ON_ACTION || aAction == OFF_ACTION)
+        {
+            Set(new_state == kState_On);
+        }
+        else if (aAction == LEVEL_ACTION)
+        {
+            SetLevel(*value);
+        }
 
         if (mActionCompleted_CB)
         {
@@ -95,16 +109,22 @@ bool LightingManager::InitiateAction(Action_t aAction, int32_t aActor)
     return action_initiated;
 }
 
+void LightingManager::SetLevel(uint8_t aLevel)
+{
+    LOG_INF("Setting brightness level to %u", aLevel);
+    mLevel = aLevel;
+    UpdateLight();
+}
+
 void LightingManager::Set(bool aOn)
 {
-    if (aOn)
-    {
-        mState = kState_On;
-        gpio_pin_set_raw(mGPIODevice, mGPIOPin, 0);
-    }
-    else
-    {
-        mState = kState_Off;
-        gpio_pin_set_raw(mGPIODevice, mGPIOPin, 1);
-    }
+    mState = aOn ? kState_On : kState_Off;
+    UpdateLight();
+}
+
+void LightingManager::UpdateLight()
+{
+    constexpr uint32_t kPwmWidthUs = 1000u;
+    const uint8_t level            = mState == kState_On ? mLevel : 0;
+    pwm_pin_set_usec(mPwmDevice, mPwmChannel, kPwmWidthUs, kPwmWidthUs * level / kMaxLevel, 0);
 }

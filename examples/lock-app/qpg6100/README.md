@@ -26,18 +26,19 @@ with separate updates.
 
 Current status of implementation:
 
+-   Button and LED control
 -   Initialization of the CHIP stack.
 -   CHIP Logging, PlatformManager and ConfigurationManager enabled.
 -   BLE: CHIPoBLE advertisement and connection available for provisioning
+-   CHIP ZCL cluster control for the Lock mechanism through CHIP tool.
 
 Pending:
 
--   Button and LED control
 -   Thread: Linking QPG6100 OpenThread implementation to CHIP build
--   Intake CHIP ZCL cluster control for the Lock mechanism through CHIP tool.
 
 For more information on Qorvo and the platforms, please visit
-[the Qorvo website](www.qorvo.com) or contact us on LPW.support@qorvo.com.
+[the Qorvo website](http://www.qorvo.com) or contact us on
+LPW.support@qorvo.com.
 
 ## Building
 
@@ -92,6 +93,7 @@ export QPG6100_SDK_ROOT=${HOME}/qpg-connectedhomeip
 
 ```
 cd ~/connectedhomeip/examples/lock-app/qpg6100
+source third_party/connectedhomeip/scripts/activate.sh
 gn gen out/debug
 ninja -C out/debug
 ```

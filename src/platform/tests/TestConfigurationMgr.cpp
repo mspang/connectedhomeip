@@ -22,8 +22,6 @@
  *
  */
 
-#include "TestConfigurationMgr.h"
-
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -33,7 +31,7 @@
 #include <nlunit-test.h>
 #include <support/CHIPMem.h>
 #include <support/CodeUtils.h>
-#include <support/TestUtils.h>
+#include <support/UnitTestRegistration.h>
 
 #include <platform/CHIPDeviceLayer.h>
 
@@ -53,7 +51,7 @@ static void TestPlatformMgr_Init(nlTestSuite * inSuite, void * inContext)
     NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
 }
 
-#if defined(DEBUG)
+#if !defined(NDEBUG)
 static void TestPlatformMgr_RunUnitTest(nlTestSuite * inSuite, void * inContext)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
@@ -403,7 +401,7 @@ static void TestConfigurationMgr_ServiceProvisioningData(nlTestSuite * inSuite, 
 static const nlTest sTests[] = {
 
     NL_TEST_DEF("Test PlatformMgr::Init", TestPlatformMgr_Init),
-#if defined(DEBUG)
+#if !defined(NDEBUG)
     NL_TEST_DEF("Test PlatformMgr::RunUnitTest", TestPlatformMgr_RunUnitTest),
 #endif
     NL_TEST_DEF("Test ConfigurationMgr::SerialNumber", TestConfigurationMgr_SerialNumber),
@@ -445,7 +443,7 @@ int TestConfigurationMgr_Teardown(void * inContext)
 
 int TestConfigurationMgr()
 {
-    nlTestSuite theSuite = { "CHIP DeviceLayer time tests", &sTests[0], TestConfigurationMgr_Setup, TestConfigurationMgr_Teardown };
+    nlTestSuite theSuite = { "ConfigurationMgr tests", &sTests[0], TestConfigurationMgr_Setup, TestConfigurationMgr_Teardown };
 
     // Run test suit againt one context.
     nlTestRunner(&theSuite, nullptr);

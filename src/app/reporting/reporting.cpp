@@ -47,6 +47,17 @@
 #include <app/util/common.h>
 #include <system/SystemLayer.h>
 
+#include "gen/attribute-type.h"
+#include "gen/cluster-id.h"
+#include "gen/command-id.h"
+
+using namespace chip;
+
+// TODO: Need to figure out what needs to happen wrt HAL tokens here, but for
+// now define ESZP_HOST to disable it.  See
+// https://github.com/project-chip/connectedhomeip/issues/3275
+#define EZSP_HOST
+
 #ifdef ATTRIBUTE_LARGEST
 #define READ_DATA_SIZE ATTRIBUTE_LARGEST
 #else
@@ -55,14 +66,14 @@
 
 #define NULL_INDEX 0xFF
 
-static void conditionallySendReport(uint8_t endpoint, EmberAfClusterId clusterId);
+static void conditionallySendReport(EndpointId endpoint, ClusterId clusterId);
 static void scheduleTick(void);
 static void removeConfiguration(uint8_t index);
 static void removeConfigurationAndScheduleTick(uint8_t index);
-static EmberAfStatus configureReceivedAttribute(const EmberAfClusterCommand * cmd, EmberAfAttributeId attributeId, uint8_t mask,
+static EmberAfStatus configureReceivedAttribute(const EmberAfClusterCommand * cmd, AttributeId attributeId, uint8_t mask,
                                                 uint16_t timeout);
 static void putReportableChangeInResp(const EmberAfPluginReportingEntry * entry, EmberAfAttributeType dataType);
-static void retrySendReport(EmberOutgoingMessageType type, uint16_t indexOrDestination, EmberApsFrame * apsFrame, uint16_t msgLen,
+static void retrySendReport(EmberOutgoingMessageType type, uint64_t indexOrDestination, EmberApsFrame * apsFrame, uint16_t msgLen,
                             uint8_t * message, EmberStatus status);
 static uint32_t computeStringHash(uint8_t * data, uint8_t length);
 
@@ -88,7 +99,7 @@ EmberAfStatus emberAfPluginReportingConfiguredCallback(const EmberAfPluginReport
     return EMBER_ZCL_STATUS_SUCCESS;
 }
 
-static void retrySendReport(EmberOutgoingMessageType type, uint16_t indexOrDestination, EmberApsFrame * apsFrame, uint16_t msgLen,
+static void retrySendReport(EmberOutgoingMessageType type, uint64_t indexOrDestination, EmberApsFrame * apsFrame, uint16_t msgLen,
                             uint8_t * message, EmberStatus status)
 {
     // Retry once, and do so by unicasting without a pointer to this callback
@@ -123,11 +134,11 @@ static uint32_t computeStringHash(uint8_t * data, uint8_t length)
 static EmberAfPluginReportingEntry table[REPORT_TABLE_SIZE];
 void emAfPluginReportingGetEntry(uint8_t index, EmberAfPluginReportingEntry * result)
 {
-    MEMMOVE(result, &table[index], sizeof(EmberAfPluginReportingEntry));
+    memmove(result, &table[index], sizeof(EmberAfPluginReportingEntry));
 }
 void emAfPluginReportingSetEntry(uint8_t index, EmberAfPluginReportingEntry * value)
 {
-    MEMMOVE(&table[index], value, sizeof(EmberAfPluginReportingEntry));
+    memmove(&table[index], value, sizeof(EmberAfPluginReportingEntry));
 }
 #else
 void emAfPluginReportingGetEntry(uint8_t index, EmberAfPluginReportingEntry * result)
@@ -154,11 +165,11 @@ void emberAfPluginReportingStackStatusCallback(EmberStatus status)
     }
 }
 
-extern "C" void emberAfPluginReportingInitCallback(void)
+void emberAfPluginReportingInitCallback(void)
 {
     // On device initialization, any attributes that have been set up to report
     // should generate an attribute report.
-    for (int i = 0; i < REPORT_TABLE_SIZE; i++)
+    for (uint8_t i = 0; i < REPORT_TABLE_SIZE; i++)
     {
         EmberAfPluginReportingEntry entry;
         emAfPluginReportingGetEntry(i, &entry);
@@ -172,7 +183,7 @@ extern "C" void emberAfPluginReportingInitCallback(void)
     scheduleTick();
 }
 
-extern "C" void emberAfPluginReportingTickEventHandler(void)
+void emberAfPluginReportingTickEventHandler(void)
 {
     EmberApsFrame * apsFrame = NULL;
     EmberAfStatus status;
@@ -183,7 +194,10 @@ extern "C" void emberAfPluginReportingTickEventHandler(void)
     uint16_t dataSize;
     bool clientToServer = false;
     EmberBindingTableEntry bindingEntry;
-    uint8_t index, reportSize = 0, currentPayloadMaxLength = 0, smallestPayloadMaxLength = 0;
+    // reportSize needs to be able to fit a sum of dataSize and some other stuff
+    // without overflowing.
+    uint32_t reportSize;
+    uint8_t index, currentPayloadMaxLength = 0, smallestPayloadMaxLength = 0;
 
     for (i = 0; i < REPORT_TABLE_SIZE; i++)
     {
@@ -306,15 +320,16 @@ extern "C" void emberAfPluginReportingTickEventHandler(void)
         // and changes.  We only track changes for data types that are small enough
         // for us to compare. For CHAR and OCTET strings, we substitute a 32-bit hash.
         emAfPluginReportVolatileData[i].reportableChange = false;
-        emAfPluginReportVolatileData[i].lastReportTimeMs = chip::System::Layer::GetClock_MonotonicMS();
+        emAfPluginReportVolatileData[i].lastReportTimeMs = static_cast<uint32_t>(chip::System::Layer::GetClock_MonotonicMS());
         uint32_t stringHash                              = 0;
         uint8_t * copyData                               = readData;
-        uint8_t copySize                                 = dataSize;
+        uint16_t copySize                                = dataSize;
         if (dataType == ZCL_OCTET_STRING_ATTRIBUTE_TYPE || dataType == ZCL_CHAR_STRING_ATTRIBUTE_TYPE)
         {
             // dataSize was set above to count the string's length byte, in addition to string length.
-            // Compute hash on string value only.
-            stringHash = computeStringHash(readData + 1, dataSize - 1);
+            // Compute hash on string value only.  Note that string length fits
+            // in one byte, so dataSize can't be larger than 256 right now.
+            stringHash = computeStringHash(readData + 1, static_cast<uint8_t>(dataSize - 1));
             copyData   = (uint8_t *) &stringHash;
             copySize   = sizeof(stringHash);
         }
@@ -338,7 +353,7 @@ extern "C" void emberAfPluginReportingTickEventHandler(void)
     scheduleTick();
 }
 
-static void conditionallySendReport(uint8_t endpoint, EmberAfClusterId clusterId)
+static void conditionallySendReport(EndpointId endpoint, ClusterId clusterId)
 {
     EmberStatus status;
     if (emberAfIsDeviceEnabled(endpoint) || clusterId == ZCL_IDENTIFY_CLUSTER_ID)
@@ -396,14 +411,14 @@ bool emberAfConfigureReportingCommandCallback(const EmberAfClusterCommand * cmd)
     // of the direction field.
     while (bufIndex + 3 < cmd->bufLen)
     {
-        EmberAfAttributeId attributeId;
+        AttributeId attributeId;
         EmberAfReportingDirection direction;
         EmberAfStatus status;
 
         direction = (EmberAfReportingDirection) emberAfGetInt8u(cmd->buffer, bufIndex, cmd->bufLen);
         bufIndex++;
-        attributeId = (EmberAfAttributeId) emberAfGetInt16u(cmd->buffer, bufIndex, cmd->bufLen);
-        bufIndex += 2;
+        attributeId = (AttributeId) emberAfGetInt16u(cmd->buffer, bufIndex, cmd->bufLen);
+        bufIndex    = static_cast<uint16_t>(bufIndex + 2);
 
         emberAfReportingPrintln(" - direction:%x, attr:%2x", direction, attributeId);
 
@@ -419,9 +434,9 @@ bool emberAfConfigureReportingCommandCallback(const EmberAfClusterCommand * cmd)
             dataType = (EmberAfAttributeType) emberAfGetInt8u(cmd->buffer, bufIndex, cmd->bufLen);
             bufIndex++;
             minInterval = emberAfGetInt16u(cmd->buffer, bufIndex, cmd->bufLen);
-            bufIndex += 2;
+            bufIndex    = static_cast<uint16_t>(bufIndex + 2);
             maxInterval = emberAfGetInt16u(cmd->buffer, bufIndex, cmd->bufLen);
-            bufIndex += 2;
+            bufIndex    = static_cast<uint16_t>(bufIndex + 2);
 
             emberAfReportingPrintln("   type:%x, min:%2x, max:%2x", dataType, minInterval, maxInterval);
             emberAfReportingFlush();
@@ -435,7 +450,7 @@ bool emberAfConfigureReportingCommandCallback(const EmberAfClusterCommand * cmd)
                 emberAfReportingPrintBuffer(cmd->buffer + bufIndex, dataSize, false);
                 emberAfReportingPrintln("");
 
-                bufIndex += dataSize;
+                bufIndex = static_cast<uint16_t>(bufIndex + dataSize);
             }
 
             // emberAfPluginReportingConfigureReportedAttribute handles non-
@@ -465,7 +480,7 @@ bool emberAfConfigureReportingCommandCallback(const EmberAfClusterCommand * cmd)
         }
         case EMBER_ZCL_REPORTING_DIRECTION_RECEIVED: {
             uint16_t timeout = emberAfGetInt16u(cmd->buffer, bufIndex, cmd->bufLen);
-            bufIndex += 2;
+            bufIndex         = static_cast<uint16_t>(bufIndex + 2);
 
             emberAfReportingPrintln("   timeout:%2x", timeout);
 
@@ -545,7 +560,7 @@ bool emberAfReadReportingConfigurationCommandCallback(const EmberAfClusterComman
     // attribute id.
     while (bufIndex + 3 <= cmd->bufLen)
     {
-        EmberAfAttributeId attributeId;
+        AttributeId attributeId;
         EmberAfAttributeMetadata * metadata = NULL;
         EmberAfPluginReportingEntry entry;
         EmberAfReportingDirection direction;
@@ -554,8 +569,8 @@ bool emberAfReadReportingConfigurationCommandCallback(const EmberAfClusterComman
 
         direction = (EmberAfReportingDirection) emberAfGetInt8u(cmd->buffer, bufIndex, cmd->bufLen);
         bufIndex++;
-        attributeId = (EmberAfAttributeId) emberAfGetInt16u(cmd->buffer, bufIndex, cmd->bufLen);
-        bufIndex += 2;
+        attributeId = (AttributeId) emberAfGetInt16u(cmd->buffer, bufIndex, cmd->bufLen);
+        bufIndex    = static_cast<uint16_t>(bufIndex + 2);
 
         switch (direction)
         {
@@ -663,8 +678,8 @@ EmberStatus emAfPluginReportingRemoveEntry(uint8_t index)
     return status;
 }
 
-void emberAfReportingAttributeChangeCallback(uint8_t endpoint, EmberAfClusterId clusterId, EmberAfAttributeId attributeId,
-                                             uint8_t mask, uint16_t manufacturerCode, EmberAfAttributeType type, uint8_t * data)
+void emberAfReportingAttributeChangeCallback(EndpointId endpoint, ClusterId clusterId, AttributeId attributeId, uint8_t mask,
+                                             uint16_t manufacturerCode, EmberAfAttributeType type, uint8_t * data)
 {
     uint8_t i;
     for (i = 0; i < REPORT_TABLE_SIZE; i++)
@@ -796,7 +811,7 @@ static void scheduleTick(void)
     }
     if (delayMs != MAX_INT32U_VALUE)
     {
-        emberAfDebugPrintln("sched report event for: 0x%4x", delayMs);
+        emberAfDebugPrintln("sched report event in %d ms", delayMs);
         emberEventControlSetDelayMS(&emberAfPluginReportingTickEventControl, delayMs);
     }
     else
@@ -909,8 +924,9 @@ EmberAfStatus emberAfPluginReportingConfigureReportedAttribute(const EmberAfPlug
         entry.manufacturerCode = newEntry->manufacturerCode;
         if (index < REPORT_TABLE_SIZE)
         {
-            emAfPluginReportVolatileData[index].lastReportTimeMs = chip::System::Layer::GetClock_MonotonicMS();
-            emAfPluginReportVolatileData[index].lastReportValue  = 0;
+            emAfPluginReportVolatileData[index].lastReportTimeMs =
+                static_cast<uint32_t>(chip::System::Layer::GetClock_MonotonicMS());
+            emAfPluginReportVolatileData[index].lastReportValue = 0;
         }
     }
 
@@ -937,7 +953,7 @@ EmberAfStatus emberAfPluginReportingConfigureReportedAttribute(const EmberAfPlug
     return status;
 }
 
-static EmberAfStatus configureReceivedAttribute(const EmberAfClusterCommand * cmd, EmberAfAttributeId attributeId, uint8_t mask,
+static EmberAfStatus configureReceivedAttribute(const EmberAfClusterCommand * cmd, AttributeId attributeId, uint8_t mask,
                                                 uint16_t timeout)
 {
     EmberAfPluginReportingEntry entry;
@@ -1061,4 +1077,14 @@ uint8_t emAfPluginReportingConditionallyAddReportingEntry(EmberAfPluginReporting
         return emAfPluginReportingAddEntry(newEntry);
     }
     return 0;
+}
+
+bool emberAfConfigureReportingResponseCallback(ClusterId clusterId, uint8_t * buffer, uint16_t bufLen)
+{
+    return false;
+}
+
+bool emberAfReadReportingConfigurationResponseCallback(ClusterId clusterId, uint8_t * buffer, uint16_t bufLen)
+{
+    return false;
 }

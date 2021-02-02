@@ -18,7 +18,7 @@
 /**
  *    @file
  *          Platform-specific configuration overrides for the chip Device Layer
- *          on Zephyr platforms.
+ *          on nRF Connect SDK platform.
  */
 
 #pragma once
@@ -31,6 +31,7 @@
 #define CHIP_DEVICE_CONFIG_ENABLE_WIFI_AP 0
 
 #define CHIP_DEVICE_CONFIG_ENABLE_THREAD CONFIG_NET_L2_OPENTHREAD
+#define CHIP_DEVICE_CONFIG_THREAD_FTD CONFIG_OPENTHREAD_FTD
 
 #define CHIP_DEVICE_CONFIG_ENABLE_CHIPOBLE CONFIG_BT
 

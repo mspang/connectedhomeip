@@ -14,8 +14,10 @@
  *    See the License for the specific language governing permissions and
  *    limitations under the License.
  */
-#ifndef EMBER_PRINT_H
-#define EMBER_PRINT_H 1
+
+#pragma once
+
+#include "debug-printing.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -49,5 +51,3 @@ void emberAfPrintBuffer(int category, const uint8_t * buffer, uint16_t length, b
  * @param string - Buffer to print as a string
  * */
 void emberAfPrintString(int category, const uint8_t * string);
-
-#endif // EMBER_PRINT_H

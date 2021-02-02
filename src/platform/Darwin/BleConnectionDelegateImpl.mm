@@ -26,9 +26,12 @@
 #include <ble/BleLayer.h>
 #include <ble/BleUUID.h>
 #include <platform/Darwin/BleConnectionDelegate.h>
+#include <setup_payload/SetupPayload.h>
 #include <support/logging/CHIPLogging.h>
 
-#import <CoreBluetooth/CoreBluetooth.h>
+#import "UUIDHelper.h"
+
+using namespace chip::Ble;
 
 @interface BleConnection : NSObject <CBCentralManagerDelegate, CBPeripheralDelegate>
 
@@ -74,7 +77,7 @@ namespace DeviceLayer {
 {
     self = [super init];
     if (self) {
-        self.shortServiceUUID = [BleConnection getShortestServiceUUID:&chip::Ble::CHIP_BLE_SVC_ID];
+        self.shortServiceUUID = [UUIDHelper GetShortestServiceUUID:&chip::Ble::CHIP_BLE_SVC_ID];
         _deviceDiscriminator = deviceDiscriminator;
         _workQueue = dispatch_queue_create("com.chip.ble.work_queue", DISPATCH_QUEUE_SERIAL);
         _centralManager = [CBCentralManager alloc];
@@ -125,20 +128,13 @@ namespace DeviceLayer {
                 NSData * serviceData = [servicesData objectForKey:serviceUUID];
 
                 NSUInteger length = [serviceData length];
-                if (length == 3 || length == 7) {
+                if (length == 7) {
                     const uint8_t * bytes = (const uint8_t *) [serviceData bytes];
                     uint8_t opCode = bytes[0];
-                    uint16_t discriminator;
-                    if (length == 7) {
-                        discriminator = (bytes[1] | (bytes[2] << 8)) & 0xfff;
-                    } else {
-                        // TODO - Remove this incorrect format.
-                        ChipLogError(Ble, "Using deprecated BLE advertisement format");
-                        discriminator = static_cast<uint16_t>(((bytes[1] & 0x0F) << 8) | bytes[2]);
-                    }
+                    uint16_t discriminator = (bytes[1] | (bytes[2] << 8)) & 0xfff;
 
-                    if (opCode == 0 && discriminator == _deviceDiscriminator) {
-                        ChipLogProgress(Ble, "Connecting to device: %@", peripheral);
+                    if (opCode == 0 && [self checkDiscriminator:discriminator]) {
+                        ChipLogProgress(Ble, "Connecting to device with discriminator: %d", discriminator);
                         [self connect:peripheral];
                         [self stopScanning];
                     }
@@ -147,6 +143,17 @@ namespace DeviceLayer {
                 break;
             }
         }
+    }
+}
+
+- (BOOL)checkDiscriminator:(uint16_t)discriminator
+{
+    // If the setup discriminator is only 4 bits, only match the lower 4 from the BLE advertisement
+    if (_deviceDiscriminator <= chip::kManualSetupDiscriminatorFieldBitMask) {
+        return _deviceDiscriminator == (discriminator & chip::kManualSetupDiscriminatorFieldBitMask);
+    } else {
+        // else compare the entire thing
+        return _deviceDiscriminator == discriminator;
     }
 }
 
@@ -168,9 +175,8 @@ namespace DeviceLayer {
 
     bool found;
 
-    CBUUID * chipServiceUUID = [CBUUID UUIDWithData:[NSData dataWithBytes:&chip::Ble::CHIP_BLE_SVC_ID.bytes length:16]];
     for (CBService * service in peripheral.services) {
-        if ([service.UUID.data isEqualToData:chipServiceUUID.data]) {
+        if ([service.UUID.data isEqualToData:_shortServiceUUID.data]) {
             found = true;
             [peripheral discoverCharacteristics:nil forService:service];
             break;
@@ -178,6 +184,7 @@ namespace DeviceLayer {
     }
 
     if (!found || error != nil) {
+        ChipLogError(Ble, "Service not found on the device.");
         _onConnectionError(_appState, BLE_ERROR_INCORRECT_STATE);
     }
 }
@@ -245,12 +252,11 @@ namespace DeviceLayer {
         [BleConnection fillServiceWithCharacteristicUuids:characteristic svcId:&svcId charId:&charId];
 
         // build a inet buffer from the rxEv and send to blelayer.
-        chip::System::PacketBuffer * msgBuf = chip::System::PacketBuffer::New();
+        chip::System::PacketBufferHandle msgBuf = chip::System::PacketBuffer::New();
 
-        if (NULL != msgBuf) {
+        if (!msgBuf.IsNull()) {
             if (msgBuf->MaxDataLength() < characteristic.value.length) {
                 ChipLogError(Ble, "Can't fit characteristic value into our packet buffer");
-                chip::System::PacketBuffer::Free(msgBuf);
                 _mBleLayer->HandleConnectionError((__bridge void *) peripheral, BLE_ERROR_INCORRECT_STATE);
             } else {
                 memcpy(msgBuf->Start(), characteristic.value.bytes, characteristic.value.length);
@@ -258,7 +264,7 @@ namespace DeviceLayer {
                     std::is_same<decltype(msgBuf->MaxDataLength()), uint16_t>::value, "Unexpected type for max data length");
                 msgBuf->SetDataLength(static_cast<uint16_t>(characteristic.value.length));
 
-                if (!_mBleLayer->HandleIndicationReceived((__bridge void *) peripheral, &svcId, &charId, msgBuf)) {
+                if (!_mBleLayer->HandleIndicationReceived((__bridge void *) peripheral, &svcId, &charId, std::move(msgBuf))) {
                     // since this error comes from device manager core
                     // we assume it would do the right thing, like closing the connection
                     ChipLogError(Ble, "Failed at handling incoming BLE data");
@@ -375,27 +381,6 @@ namespace DeviceLayer {
         ChipLogError(Ble, "Service UUIDs are incompatible");
     }
     memcpy(svcId->bytes, serviceFullUUID, sizeof(svcId->bytes));
-}
-
-+ (CBUUID *)getShortestServiceUUID:(const chip::Ble::ChipBleUUID *)svcId
-{
-    // shorten the 16-byte UUID reported by BLE Layer to shortest possible, 2 or 4 bytes
-    // this is the BLE Service UUID Base. If a 16-byte service UUID partially matches with this 12 bytes,
-    // it could be shorten to 2 or 4 bytes.
-    static const uint8_t bleBaseUUID[12] = { 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB };
-    if (0 == memcmp(svcId->bytes + 4, bleBaseUUID, sizeof(bleBaseUUID))) {
-        // okay, let's try to shorten it
-        if ((0 == svcId->bytes[0]) && (0 == svcId->bytes[1])) {
-            // the highest 2 bytes are both 0, so we just need 2 bytes
-            return [CBUUID UUIDWithData:[NSData dataWithBytes:(svcId->bytes + 2) length:2]];
-        } else {
-            // we need to use 4 bytes
-            return [CBUUID UUIDWithData:[NSData dataWithBytes:svcId->bytes length:4]];
-        }
-    } else {
-        // it cannot be shorten as it doesn't match with the BLE Service UUID Base
-        return [CBUUID UUIDWithData:[NSData dataWithBytes:svcId->bytes length:16]];
-    }
 }
 
 - (void)setBleLayer:(chip::Ble::BleLayer *)bleLayer

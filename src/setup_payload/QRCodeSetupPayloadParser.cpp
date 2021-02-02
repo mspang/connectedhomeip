@@ -33,18 +33,17 @@
 #include <core/CHIPError.h>
 #include <core/CHIPTLVData.hpp>
 #include <core/CHIPTLVUtilities.hpp>
-#include <protocols/CHIPProtocols.h>
+#include <protocols/Protocols.h>
 #include <support/CodeUtils.h>
 #include <support/RandUtils.h>
+#include <support/ReturnMacros.h>
+#include <support/SafeInt.h>
 #include <support/ScopedBuffer.h>
 
-using namespace chip;
-using namespace std;
-using namespace chip::TLV;
-using namespace chip::TLV::Utilities;
+namespace chip {
 
 // Populate numberOfBits into dest from buf starting at startIndex
-static CHIP_ERROR readBits(vector<uint8_t> buf, int & index, uint64_t & dest, size_t numberOfBitsToRead)
+static CHIP_ERROR readBits(std::vector<uint8_t> buf, size_t & index, uint64_t & dest, size_t numberOfBitsToRead)
 {
     dest = 0;
     if (index + numberOfBitsToRead > buf.size() * 8 || numberOfBitsToRead > sizeof(uint64_t) * 8)
@@ -54,7 +53,7 @@ static CHIP_ERROR readBits(vector<uint8_t> buf, int & index, uint64_t & dest, si
         return CHIP_ERROR_INVALID_ARGUMENT;
     }
 
-    int currentIndex = index;
+    size_t currentIndex = index;
     for (size_t bitsRead = 0; bitsRead < numberOfBitsToRead; bitsRead++)
     {
         if (buf[currentIndex / 8] & (1 << (currentIndex % 8)))
@@ -67,7 +66,7 @@ static CHIP_ERROR readBits(vector<uint8_t> buf, int & index, uint64_t & dest, si
     return CHIP_NO_ERROR;
 }
 
-static CHIP_ERROR openTLVContainer(TLVReader & reader, TLVType type, uint64_t tag, TLVReader & containerReader)
+static CHIP_ERROR openTLVContainer(TLV::TLVReader & reader, TLV::TLVType type, uint64_t tag, TLV::TLVReader & containerReader)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
     VerifyOrExit(reader.GetType() == type, err = CHIP_ERROR_INVALID_ARGUMENT);
@@ -82,7 +81,7 @@ exit:
     return err;
 }
 
-static CHIP_ERROR retrieveOptionalInfoString(TLVReader & reader, OptionalQRCodeInfo & info)
+static CHIP_ERROR retrieveOptionalInfoString(TLV::TLVReader & reader, OptionalQRCodeInfo & info)
 {
     CHIP_ERROR err;
     uint32_t valLength = reader.GetLength();
@@ -94,13 +93,13 @@ static CHIP_ERROR retrieveOptionalInfoString(TLVReader & reader, OptionalQRCodeI
     SuccessOrExit(err);
 
     info.type = optionalQRCodeInfoTypeString;
-    info.data = string(value.Get());
+    info.data = std::string(value.Get());
 
 exit:
     return err;
 }
 
-static CHIP_ERROR retrieveOptionalInfoInt32(TLVReader & reader, OptionalQRCodeInfo & info)
+static CHIP_ERROR retrieveOptionalInfoInt32(TLV::TLVReader & reader, OptionalQRCodeInfo & info)
 {
     int32_t value;
     CHIP_ERROR err = reader.Get(value);
@@ -113,7 +112,7 @@ exit:
     return err;
 }
 
-static CHIP_ERROR retrieveOptionalInfoInt64(TLVReader & reader, OptionalQRCodeInfoExtension & info)
+static CHIP_ERROR retrieveOptionalInfoInt64(TLV::TLVReader & reader, OptionalQRCodeInfoExtension & info)
 {
     int64_t value;
     CHIP_ERROR err = reader.Get(value);
@@ -126,7 +125,7 @@ exit:
     return err;
 }
 
-static CHIP_ERROR retrieveOptionalInfoUInt32(TLVReader & reader, OptionalQRCodeInfoExtension & info)
+static CHIP_ERROR retrieveOptionalInfoUInt32(TLV::TLVReader & reader, OptionalQRCodeInfoExtension & info)
 {
     uint32_t value;
     CHIP_ERROR err = reader.Get(value);
@@ -139,7 +138,7 @@ exit:
     return err;
 }
 
-static CHIP_ERROR retrieveOptionalInfoUInt64(TLVReader & reader, OptionalQRCodeInfoExtension & info)
+static CHIP_ERROR retrieveOptionalInfoUInt64(TLV::TLVReader & reader, OptionalQRCodeInfoExtension & info)
 {
     uint64_t value;
     CHIP_ERROR err = reader.Get(value);
@@ -152,7 +151,7 @@ exit:
     return err;
 }
 
-static CHIP_ERROR retrieveOptionalInfo(TLVReader & reader, OptionalQRCodeInfo & info, optionalQRCodeInfoType type)
+static CHIP_ERROR retrieveOptionalInfo(TLV::TLVReader & reader, OptionalQRCodeInfo & info, optionalQRCodeInfoType type)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
 
@@ -172,7 +171,7 @@ static CHIP_ERROR retrieveOptionalInfo(TLVReader & reader, OptionalQRCodeInfo & 
     return err;
 }
 
-static CHIP_ERROR retrieveOptionalInfo(TLVReader & reader, OptionalQRCodeInfoExtension & info, optionalQRCodeInfoType type)
+static CHIP_ERROR retrieveOptionalInfo(TLV::TLVReader & reader, OptionalQRCodeInfoExtension & info, optionalQRCodeInfoType type)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
 
@@ -200,29 +199,29 @@ static CHIP_ERROR retrieveOptionalInfo(TLVReader & reader, OptionalQRCodeInfoExt
     return err;
 }
 
-CHIP_ERROR QRCodeSetupPayloadParser::retrieveOptionalInfos(SetupPayload & outPayload, TLVReader & reader)
+CHIP_ERROR QRCodeSetupPayloadParser::retrieveOptionalInfos(SetupPayload & outPayload, TLV::TLVReader & reader)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
-    TLVType type;
+    TLV::TLVType type;
     uint8_t tag;
     while (err == CHIP_NO_ERROR)
     {
         type = reader.GetType();
-        if (type != kTLVType_UTF8String && type != kTLVType_SignedInteger && type != kTLVType_UnsignedInteger)
+        if (type != TLV::kTLVType_UTF8String && type != TLV::kTLVType_SignedInteger && type != TLV::kTLVType_UnsignedInteger)
         {
             err = reader.Next();
             continue;
         }
 
-        tag = static_cast<uint8_t>(TagNumFromTag(reader.GetTag()));
-        VerifyOrExit(IsContextTag(tag) == true || IsProfileTag(tag) == true, err = CHIP_ERROR_INVALID_TLV_TAG);
+        tag = static_cast<uint8_t>(TLV::TagNumFromTag(reader.GetTag()));
+        VerifyOrExit(TLV::IsContextTag(tag) == true || TLV::IsProfileTag(tag) == true, err = CHIP_ERROR_INVALID_TLV_TAG);
 
         optionalQRCodeInfoType elemType = optionalQRCodeInfoTypeUnknown;
-        if (type == kTLVType_UTF8String)
+        if (type == TLV::kTLVType_UTF8String)
         {
             elemType = optionalQRCodeInfoTypeString;
         }
-        if (type == kTLVType_SignedInteger || type == kTLVType_UnsignedInteger)
+        if (type == TLV::kTLVType_SignedInteger || type == TLV::kTLVType_UnsignedInteger)
         {
             elemType = outPayload.getNumericTypeFor(tag);
         }
@@ -258,21 +257,24 @@ exit:
     return err;
 }
 
-CHIP_ERROR QRCodeSetupPayloadParser::parseTLVFields(SetupPayload & outPayload, uint8_t * tlvDataStart,
-                                                    uint32_t tlvDataLengthInBytes)
+CHIP_ERROR QRCodeSetupPayloadParser::parseTLVFields(SetupPayload & outPayload, uint8_t * tlvDataStart, size_t tlvDataLengthInBytes)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
-    TLVReader rootReader;
-    rootReader.Init(tlvDataStart, tlvDataLengthInBytes);
-    rootReader.ImplicitProfileId = chip::Protocols::kChipProtocol_ServiceProvisioning;
+    if (!CanCastTo<uint32_t>(tlvDataLengthInBytes))
+    {
+        return CHIP_ERROR_INVALID_ARGUMENT;
+    }
+    TLV::TLVReader rootReader;
+    rootReader.Init(tlvDataStart, static_cast<uint32_t>(tlvDataLengthInBytes));
+    rootReader.ImplicitProfileId = chip::Protocols::kProtocol_ServiceProvisioning;
     err                          = rootReader.Next();
     SuccessOrExit(err);
 
-    if (rootReader.GetType() == kTLVType_Structure)
+    if (rootReader.GetType() == TLV::kTLVType_Structure)
     {
-        TLVReader innerStructureReader;
-        err = openTLVContainer(rootReader, kTLVType_Structure,
-                               ProfileTag(rootReader.ImplicitProfileId, kTag_QRCodeExensionDescriptor), innerStructureReader);
+        TLV::TLVReader innerStructureReader;
+        err = openTLVContainer(rootReader, TLV::kTLVType_Structure,
+                               TLV::ProfileTag(rootReader.ImplicitProfileId, kTag_QRCodeExensionDescriptor), innerStructureReader);
         SuccessOrExit(err);
         err = innerStructureReader.Next();
         SuccessOrExit(err);
@@ -291,16 +293,16 @@ exit:
     return err;
 }
 
-CHIP_ERROR QRCodeSetupPayloadParser::populateTLV(SetupPayload & outPayload, const vector<uint8_t> & buf, int & index)
+CHIP_ERROR QRCodeSetupPayloadParser::populateTLV(SetupPayload & outPayload, const std::vector<uint8_t> & buf, size_t & index)
 {
-    CHIP_ERROR err        = CHIP_NO_ERROR;
     size_t bitsLeftToRead = (buf.size() * 8) - index;
-    size_t tlvBytesLength = ceil(double(bitsLeftToRead) / 8);
+    size_t tlvBytesLength = (bitsLeftToRead + 7) / 8; // ceil(bitsLeftToRead/8)
     chip::Platform::ScopedMemoryBuffer<uint8_t> tlvArray;
 
-    SuccessOrExit(tlvBytesLength == 0);
+    ReturnErrorCodeIf(tlvBytesLength == 0, CHIP_NO_ERROR);
+
     tlvArray.Alloc(tlvBytesLength);
-    VerifyOrExit(tlvArray, err = CHIP_ERROR_NO_MEMORY);
+    ReturnErrorCodeIf(!tlvArray, CHIP_ERROR_NO_MEMORY);
 
     for (size_t i = 0; i < tlvBytesLength; i++)
     {
@@ -309,35 +311,31 @@ CHIP_ERROR QRCodeSetupPayloadParser::populateTLV(SetupPayload & outPayload, cons
         tlvArray[i] = static_cast<uint8_t>(dest);
     }
 
-    err = parseTLVFields(outPayload, tlvArray.Get(), tlvBytesLength);
-    SuccessOrExit(err);
-
-exit:
-    return err;
+    return parseTLVFields(outPayload, tlvArray.Get(), tlvBytesLength);
 }
 
-static string extractPayload(string inString)
+static std::string extractPayload(std::string inString)
 {
-    string chipSegment;
+    std::string chipSegment;
     char delimiter = '%';
-    vector<int> delimiterIndices;
-    delimiterIndices.push_back(-1);
+    std::vector<size_t> startIndices;
+    startIndices.push_back(0);
 
     for (size_t i = 0; i < inString.length(); i++)
     {
         if (inString[i] == delimiter)
         {
-            delimiterIndices.push_back(i);
+            startIndices.push_back(i + 1);
         }
     }
 
     // Find the first string between delimiters that starts with kQRCodePrefix
-    for (size_t i = 0; i < delimiterIndices.size(); i++)
+    for (size_t i = 0; i < startIndices.size(); i++)
     {
-        size_t startIndex = delimiterIndices[i] + 1;
-        size_t endIndex   = (i == delimiterIndices.size() - 1 ? string::npos : delimiterIndices[i + 1]);
-        size_t length     = (endIndex != string::npos ? endIndex - startIndex : string::npos);
-        string segment    = inString.substr(startIndex, length);
+        size_t startIndex   = startIndices[i];
+        size_t endIndex     = (i == startIndices.size() - 1 ? std::string::npos : startIndices[i + 1] - 1);
+        size_t length       = (endIndex != std::string::npos ? endIndex - startIndex : std::string::npos);
+        std::string segment = inString.substr(startIndex, length);
 
         // Find a segment that starts with kQRCodePrefix
         if (segment.find(kQRCodePrefix, 0) == 0 && segment.length() > strlen(kQRCodePrefix))
@@ -357,12 +355,12 @@ static string extractPayload(string inString)
 
 CHIP_ERROR QRCodeSetupPayloadParser::populatePayload(SetupPayload & outPayload)
 {
-    vector<uint8_t> buf;
-    CHIP_ERROR err      = CHIP_NO_ERROR;
-    int indexToReadFrom = 0;
+    std::vector<uint8_t> buf;
+    CHIP_ERROR err         = CHIP_NO_ERROR;
+    size_t indexToReadFrom = 0;
     uint64_t dest;
 
-    string payload = extractPayload(mBase41Representation);
+    std::string payload = extractPayload(mBase41Representation);
     VerifyOrExit(payload.length() != 0, err = CHIP_ERROR_INVALID_ARGUMENT);
 
     err = base41Decode(payload, buf);
@@ -370,19 +368,23 @@ CHIP_ERROR QRCodeSetupPayloadParser::populatePayload(SetupPayload & outPayload)
 
     err = readBits(buf, indexToReadFrom, dest, kVersionFieldLengthInBits);
     SuccessOrExit(err);
-    outPayload.version = dest;
+    static_assert(kVersionFieldLengthInBits <= 8, "Won't fit in uint8_t");
+    outPayload.version = static_cast<uint8_t>(dest);
 
     err = readBits(buf, indexToReadFrom, dest, kVendorIDFieldLengthInBits);
     SuccessOrExit(err);
-    outPayload.vendorID = dest;
+    static_assert(kVendorIDFieldLengthInBits <= 16, "Won't fit in uint16_t");
+    outPayload.vendorID = static_cast<uint16_t>(dest);
 
     err = readBits(buf, indexToReadFrom, dest, kProductIDFieldLengthInBits);
     SuccessOrExit(err);
-    outPayload.productID = dest;
+    static_assert(kProductIDFieldLengthInBits <= 16, "Won't fit in uint16_t");
+    outPayload.productID = static_cast<uint16_t>(dest);
 
     err = readBits(buf, indexToReadFrom, dest, kCustomFlowRequiredFieldLengthInBits);
     SuccessOrExit(err);
-    outPayload.requiresCustomFlow = dest;
+    static_assert(kCustomFlowRequiredFieldLengthInBits <= 8, "Won't fit in uint8_t");
+    outPayload.requiresCustomFlow = static_cast<uint8_t>(dest);
 
     err = readBits(buf, indexToReadFrom, dest, kRendezvousInfoFieldLengthInBits);
     SuccessOrExit(err);
@@ -390,11 +392,13 @@ CHIP_ERROR QRCodeSetupPayloadParser::populatePayload(SetupPayload & outPayload)
 
     err = readBits(buf, indexToReadFrom, dest, kPayloadDiscriminatorFieldLengthInBits);
     SuccessOrExit(err);
-    outPayload.discriminator = dest;
+    static_assert(kPayloadDiscriminatorFieldLengthInBits <= 16, "Won't fit in uint16_t");
+    outPayload.discriminator = static_cast<uint16_t>(dest);
 
     err = readBits(buf, indexToReadFrom, dest, kSetupPINCodeFieldLengthInBits);
     SuccessOrExit(err);
-    outPayload.setUpPINCode = dest;
+    static_assert(kSetupPINCodeFieldLengthInBits <= 32, "Won't fit in uint32_t");
+    outPayload.setUpPINCode = static_cast<uint32_t>(dest);
 
     err = readBits(buf, indexToReadFrom, dest, kPaddingFieldLengthInBits);
     SuccessOrExit(err);
@@ -405,3 +409,5 @@ CHIP_ERROR QRCodeSetupPayloadParser::populatePayload(SetupPayload & outPayload)
 exit:
     return err;
 }
+
+} // namespace chip

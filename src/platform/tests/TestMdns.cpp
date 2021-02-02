@@ -7,10 +7,11 @@
 #include "lib/mdns/platform/Mdns.h"
 #include "platform/CHIPDeviceLayer.h"
 #include "support/CHIPMem.h"
+#include "support/UnitTestRegistration.h"
 
-using chip::Protocols::Mdns::MdnsService;
-using chip::Protocols::Mdns::MdnsServiceProtocol;
-using chip::Protocols::Mdns::TextEntry;
+using chip::Mdns::MdnsService;
+using chip::Mdns::MdnsServiceProtocol;
+using chip::Mdns::TextEntry;
 
 static void HandleResolve(void * context, MdnsService * result, CHIP_ERROR error)
 {
@@ -52,8 +53,8 @@ static void InitCallback(void * context, CHIP_ERROR error)
 
     NL_TEST_ASSERT(suite, error == CHIP_NO_ERROR);
 
-    service.interface = INET_NULL_INTERFACEID;
-    service.mPort     = 80;
+    service.mInterface = INET_NULL_INTERFACEID;
+    service.mPort      = 80;
     strcpy(service.mName, "test");
     strcpy(service.mType, "_mock");
     service.mProtocol      = MdnsServiceProtocol::kMdnsProtocolTcp;
@@ -62,9 +63,12 @@ static void InitCallback(void * context, CHIP_ERROR error)
     entry.mDataSize        = strlen(reinterpret_cast<const char *>(entry.mData));
     service.mTextEntryies  = &entry;
     service.mTextEntrySize = 1;
+    service.mSubTypes      = nullptr;
+    service.mSubTypeSize   = 0;
 
     NL_TEST_ASSERT(suite, ChipMdnsPublishService(&service) == CHIP_NO_ERROR);
-    ChipMdnsBrowse("_mock", MdnsServiceProtocol::kMdnsProtocolTcp, INET_NULL_INTERFACEID, HandleBrowse, suite);
+    ChipMdnsBrowse("_mock", MdnsServiceProtocol::kMdnsProtocolTcp, chip::Inet::kIPAddressType_Any, INET_NULL_INTERFACEID,
+                   HandleBrowse, suite);
 }
 
 static void ErrorCallback(void * context, CHIP_ERROR error)
@@ -80,7 +84,7 @@ void TestMdnsPubSub(nlTestSuite * inSuite, void * inContext)
 {
     chip::Platform::MemoryInit();
     chip::DeviceLayer::PlatformMgr().InitChipStack();
-    NL_TEST_ASSERT(inSuite, chip::Protocols::Mdns::ChipMdnsInit(InitCallback, ErrorCallback, inSuite) == CHIP_NO_ERROR);
+    NL_TEST_ASSERT(inSuite, chip::Mdns::ChipMdnsInit(InitCallback, ErrorCallback, inSuite) == CHIP_NO_ERROR);
 
     ChipLogProgress(DeviceLayer, "Start EventLoop");
     chip::DeviceLayer::PlatformMgr().RunEventLoop();
@@ -113,3 +117,5 @@ int TestMdns()
     }
     return retVal;
 }
+
+CHIP_REGISTER_TEST_SUITE(TestMdns);

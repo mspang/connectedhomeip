@@ -23,18 +23,23 @@
 #pragma once
 
 #include <core/CHIPCore.h>
-#include <protocols/CHIPProtocols.h>
+#include <protocols/Protocols.h>
 #include <support/BufBound.h>
 #include <transport/NetworkProvisioning.h>
+#include <transport/PASESession.h>
 #include <transport/RendezvousParameters.h>
 #include <transport/RendezvousSessionDelegate.h>
-#include <transport/SecurePairingSession.h>
-
+#include <transport/TransportMgr.h>
+#include <transport/raw/MessageHeader.h>
+#include <transport/raw/PeerAddress.h>
 namespace chip {
 
 namespace DeviceLayer {
 class CHIPDeviceEvent;
 }
+
+class SecureSessionMgr;
+class SecureSessionHandle;
 
 /**
  * RendezvousSession establishes and maintains the first connection between
@@ -58,10 +63,11 @@ class CHIPDeviceEvent;
  *
  * @dotfile dots/Rendezvous/RendezvousSessionInit.dot
  */
-class RendezvousSession : public SecurePairingSessionDelegate,
+class RendezvousSession : public SessionEstablishmentDelegate,
                           public RendezvousSessionDelegate,
                           public RendezvousDeviceCredentialsDelegate,
-                          public NetworkProvisioningDelegate
+                          public NetworkProvisioningDelegate,
+                          public TransportMgrDelegate
 {
 public:
     enum State : uint8_t
@@ -79,28 +85,36 @@ public:
      * @brief
      *  Initialize the underlying transport using the RendezvousParameters passed in the constructor.
      *
+     * @param params       The RendezvousParameters
+     * @param transportMgr The transport to use
+     * @param sessionMgr   Pointer to secure session manager
      * @ return CHIP_ERROR  The result of the initialization
      */
-    CHIP_ERROR Init(const RendezvousParameters & params);
+    CHIP_ERROR Init(const RendezvousParameters & params, TransportMgrBase * transportMgr, SecureSessionMgr * sessionMgr);
 
     /**
      * @brief
      *  Return the associated pairing session.
      *
-     * @return SecurePairingSession The associated pairing session
+     * @return PASESession The associated pairing session
      */
-    SecurePairingSession & GetPairingSession() { return mPairingSession; }
+    PASESession & GetPairingSession() { return mPairingSession; }
 
-    //////////// SecurePairingSessionDelegate Implementation ///////////////
-    CHIP_ERROR SendMessage(System::PacketBuffer * msgBuf) override;
-    void OnPairingError(CHIP_ERROR err) override;
-    void OnPairingComplete() override;
+    Optional<NodeId> GetLocalNodeId() const { return mParams.GetLocalNodeId(); }
+    Optional<NodeId> GetRemoteNodeId() const { return mParams.GetRemoteNodeId(); }
+
+    //////////// SessionEstablishmentDelegate Implementation ///////////////
+    CHIP_ERROR SendSessionEstablishmentMessage(const PacketHeader & header, const Transport::PeerAddress & peerAddress,
+                                               System::PacketBufferHandle msgBuf) override;
+    void OnSessionEstablishmentError(CHIP_ERROR err) override;
+    void OnSessionEstablished() override;
 
     //////////// RendezvousSessionDelegate Implementation ///////////////
     void OnRendezvousConnectionOpened() override;
     void OnRendezvousConnectionClosed() override;
     void OnRendezvousError(CHIP_ERROR err) override;
-    void OnRendezvousMessageReceived(System::/*  */ PacketBuffer * buffer) override;
+    void OnRendezvousMessageReceived(const PacketHeader & packetHeader, const Transport::PeerAddress & peerAddress,
+                                     System::PacketBufferHandle buffer) override;
 
     //////////// RendezvousDeviceCredentialsDelegate Implementation ///////////////
     void SendNetworkCredentials(const char * ssid, const char * passwd) override;
@@ -108,9 +122,13 @@ public:
     void SendOperationalCredentials() override;
 
     //////////// NetworkProvisioningDelegate Implementation ///////////////
-    CHIP_ERROR SendSecureMessage(Protocols::CHIPProtocolId protocol, uint8_t msgType, System::PacketBuffer * msgBug) override;
+    CHIP_ERROR SendSecureMessage(Protocols::CHIPProtocolId protocol, uint8_t msgType, System::PacketBufferHandle msgBug) override;
     void OnNetworkProvisioningError(CHIP_ERROR error) override;
     void OnNetworkProvisioningComplete() override;
+
+    //////////// TransportMgrDelegate Implementation ///////////////
+    void OnMessageReceived(const PacketHeader & header, const Transport::PeerAddress & source,
+                           System::PacketBufferHandle msgBuf) override;
 
     /**
      * @brief
@@ -122,24 +140,30 @@ public:
     const Inet::IPAddress & GetIPAddress() const { return mNetworkProvision.GetIPAddress(); }
 
 private:
-    CHIP_ERROR SendPairingMessage(System::PacketBuffer * msgBug);
-    CHIP_ERROR HandlePairingMessage(System::PacketBuffer * msgBug);
+    CHIP_ERROR HandlePairingMessage(const PacketHeader & packetHeader, const Transport::PeerAddress & peerAddress,
+                                    System::PacketBufferHandle msgBuf);
     CHIP_ERROR Pair(Optional<NodeId> nodeId, uint32_t setupPINCode);
     CHIP_ERROR WaitForPairing(Optional<NodeId> nodeId, uint32_t setupPINCode);
 
-    CHIP_ERROR HandleSecureMessage(System::PacketBuffer * msgBuf);
+    CHIP_ERROR HandleSecureMessage(const PacketHeader & packetHeader, const Transport::PeerAddress & peerAddress,
+                                   System::PacketBufferHandle msgBuf);
     Transport::Base * mTransport          = nullptr; ///< Underlying transport
     RendezvousSessionDelegate * mDelegate = nullptr; ///< Underlying transport events
     RendezvousParameters mParams;                    ///< Rendezvous configuration
 
-    SecurePairingSession mPairingSession;
+    PASESession mPairingSession;
     NetworkProvisioning mNetworkProvision;
-    SecureSession mSecureSession;
-    uint32_t mSecureMessageIndex = 0;
-    uint16_t mNextKeyId          = 0;
+    Transport::PeerAddress mPeerAddress; // Current peer address we are doing rendezvous with.
+    TransportMgrBase * mTransportMgr;
+    uint16_t mNextKeyId                         = 0;
+    SecureSessionMgr * mSecureSessionMgr        = nullptr;
+    SecureSessionHandle * mPairingSessionHandle = nullptr;
 
     RendezvousSession::State mCurrentState = State::kInit;
-    void UpdateState(RendezvousSession::State newState);
+    void UpdateState(RendezvousSession::State newState, CHIP_ERROR err = CHIP_NO_ERROR);
+
+    void InitPairingSessionHandle();
+    void ReleasePairingSessionHandle();
 };
 
 } // namespace chip
