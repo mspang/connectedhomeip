@@ -423,6 +423,17 @@ void BLEManagerImpl::_OnPlatformEvent(const ChipDeviceEvent * event)
     }
     break;
 
+    case DeviceEventType::kFabricMembershipChange:
+    case DeviceEventType::kServiceProvisioningChange:
+    case DeviceEventType::kAccountPairingChange:
+    case DeviceEventType::kThreadStateChange:
+    case DeviceEventType::kThreadConnectivityChange: {
+        ChipLogProgress(DeviceLayer, "_OnPlatformEvent connectivity change");
+        mFlags.Set(Flags::kRestartAdvertising, true);
+        PlatformMgr().ScheduleWork(DriveBLEState, 0);
+    }
+    break;
+
     default:
         ChipLogProgress(DeviceLayer, "_OnPlatformEvent default:  event->Type = %d", event->Type);
         break;
