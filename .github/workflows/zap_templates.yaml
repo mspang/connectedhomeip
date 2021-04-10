@@ -49,4 +49,4 @@ jobs:
             - name: Check for uncommited changes
               run: |
                 git add .
-                git diff-index --quiet HEAD --
+                git diff-index HEAD --
