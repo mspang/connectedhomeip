@@ -48,6 +48,30 @@ using namespace ::chip::DeviceLayer;
 uint32_t identifyTimerCount;
 constexpr uint32_t kIdentifyTimerDelayMS = 250;
 
+namespace {
+
+constexpr uint32_t kMdnsTimerDelayMs = 10000;
+
+bool g_timer_active = false;
+
+void OnStartMdnsTimeout(Layer * systemLayer, void * appState, Error error)
+{
+    ESP_LOGI(TAG, "(Re-)Starting mDNS server");
+    chip::app::Mdns::StartServer();
+    g_timer_active = false;
+}
+
+void StartMdnsDelayed()
+{
+    if (g_timer_active)
+        return;
+    ESP_LOGI(TAG, "Delaying (Re-)Start of mDNS server");
+    SystemLayer.StartTimer(kMdnsTimerDelayMs, OnStartMdnsTimeout, nullptr);
+    g_timer_active = true;
+}
+
+} // namespace
+
 void DeviceCallbacks::DeviceEventCallback(const ChipDeviceEvent * event, intptr_t arg)
 {
     switch (event->Type)
@@ -67,7 +91,7 @@ void DeviceCallbacks::DeviceEventCallback(const ChipDeviceEvent * event, intptr_
             // will not trigger a 'internet connectivity change' as there is no internet
             // connectivity. MDNS still wants to refresh its listening interfaces to include the
             // newly selected address.
-            chip::app::Mdns::StartServer();
+            StartMdnsDelayed();
         }
         break;
     }
@@ -105,7 +129,7 @@ void DeviceCallbacks::OnInternetConnectivityChange(const ChipDeviceEvent * event
     {
         ESP_LOGI(TAG, "Server ready at: %s:%d", event->InternetConnectivityChange.address, CHIP_PORT);
         wifiLED.Set(true);
-        chip::app::Mdns::StartServer();
+        StartMdnsDelayed();
     }
     else if (event->InternetConnectivityChange.IPv4 == kConnectivity_Lost)
     {
@@ -115,7 +139,7 @@ void DeviceCallbacks::OnInternetConnectivityChange(const ChipDeviceEvent * event
     if (event->InternetConnectivityChange.IPv6 == kConnectivity_Established)
     {
         ESP_LOGI(TAG, "IPv6 Server ready...");
-        chip::app::Mdns::StartServer();
+        StartMdnsDelayed();
     }
     else if (event->InternetConnectivityChange.IPv6 == kConnectivity_Lost)
     {
@@ -149,7 +173,7 @@ void IdentifyTimerHandler(Layer * systemLayer, void * appState, Error error)
 
     if (identifyTimerCount)
     {
-        SystemLayer.StartTimer(kIdentifyTimerDelayMS, IdentifyTimerHandler, appState);
+        StartMdnsDelayed();
         // Decrement the timer count.
         identifyTimerCount--;
     }
