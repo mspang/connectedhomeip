@@ -1078,7 +1078,7 @@ CHIP_ERROR BLEManagerImpl::StartAdvertising(void)
     CHIP_ERROR err;
     ble_gap_adv_params adv_params;
     memset(&adv_params, 0, sizeof(adv_params));
-    uint8_t own_addr_type = BLE_OWN_ADDR_RANDOM;
+    uint8_t own_addr_type = BLE_OWN_ADDR_PUBLIC;
 
     adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
 
@@ -1119,12 +1119,14 @@ CHIP_ERROR BLEManagerImpl::StartAdvertising(void)
         }
         else
         {
+#if 0
             err = MapBLEError(ble_hs_pvcy_rpa_config(NIMBLE_HOST_ENABLE_RPA));
             if (err != CHIP_NO_ERROR)
             {
                 ChipLogError(DeviceLayer, "RPA not set: %s", ErrorStr(err));
                 return err;
             }
+#endif
         }
         err = MapBLEError(ble_gap_adv_start(own_addr_type, NULL, BLE_HS_FOREVER, &adv_params, ble_svr_gap_event, NULL));
         if (err == CHIP_NO_ERROR)
