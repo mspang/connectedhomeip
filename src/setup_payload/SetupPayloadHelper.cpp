@@ -34,7 +34,7 @@ enum SetupPayloadKey
     SetupPayloadKey_Version,
     SetupPayloadKey_VendorID,
     SetupPayloadKey_ProductID,
-    SetupPayloadKey_CommissioningFlow,
+    SetupPayloadKey_RequiresCustomFlowTrue,
     SetupPayloadKey_RendezVousInformation,
     SetupPayloadKey_Discriminator,
     SetupPayloadKey_SetupPINCode,
@@ -64,9 +64,10 @@ static CHIP_ERROR resolveSetupPayloadParameter(SetupPayloadParameter & parameter
     {
         parameter.key = SetupPayloadKey_ProductID;
     }
-    else if (key == "commissioningFlow")
+    else if (key == "requiresCustomFlowTrue")
     {
-        parameter.key = SetupPayloadKey_CommissioningFlow;
+        parameter.key   = SetupPayloadKey_RequiresCustomFlowTrue;
+        shouldHaveValue = false;
     }
     else if (key == "rendezVousInformation")
     {
@@ -118,9 +119,9 @@ static CHIP_ERROR addParameter(SetupPayload & setupPayload, const SetupPayloadPa
         ChipLogDetail(SetupPayload, "Loaded productID: %u", (uint16_t) parameter.uintValue);
         setupPayload.productID = static_cast<uint16_t>(parameter.uintValue);
         break;
-    case SetupPayloadKey_CommissioningFlow:
-        ChipLogDetail(SetupPayload, "Commissioning flow: %u", (uint8_t) parameter.uintValue);
-        setupPayload.commissioningFlow = static_cast<CommissioningFlow>(parameter.uintValue);
+    case SetupPayloadKey_RequiresCustomFlowTrue:
+        ChipLogDetail(SetupPayload, "Requires custom flow was set to true");
+        setupPayload.requiresCustomFlow = true;
         break;
     case SetupPayloadKey_RendezVousInformation:
         ChipLogDetail(SetupPayload, "Loaded rendezvousInfo: %u", (uint16_t) parameter.uintValue);

@@ -120,7 +120,7 @@ Takes no arguments.
 
 ```shell
 uart:~$ chip qrcode
-MT:W0GU2OTB00KA0648G00
+CH:H34.GHY00 0C9SS0
 ```
 
 #### `qrcodeurl`

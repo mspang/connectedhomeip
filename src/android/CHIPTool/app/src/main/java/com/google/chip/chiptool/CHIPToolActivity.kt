@@ -146,9 +146,9 @@ class CHIPToolActivity :
     val records = (messages[0] as NdefMessage).records
     if (records.size != 1) return
 
-    // Require NDEF URI record starting with "mt:"
+    // Require NDEF URI record starting with "ch:"
     val uri = records[0].toUri()
-    if (!uri?.scheme.equals("mt", true)) return
+    if (!uri?.scheme.equals("ch", true)) return
 
     lateinit var setupPayload: SetupPayload
     try {
