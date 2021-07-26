@@ -387,6 +387,8 @@ CHIP_ERROR Device::UpdateAddress(const Transport::PeerAddress & addr)
 {
     bool didLoad;
 
+    mDeviceAddress = addr;
+
     ReturnErrorOnFailure(LoadSecureSessionParametersIfNeeded(didLoad));
 
     Transport::PeerConnectionState * connectionState = mSessionManager->GetPeerConnectionState(mSecureSession);
@@ -399,7 +401,6 @@ CHIP_ERROR Device::UpdateAddress(const Transport::PeerAddress & addr)
         return CHIP_NO_ERROR;
     }
 
-    mDeviceAddress = addr;
     connectionState->SetPeerAddress(addr);
 
     return CHIP_NO_ERROR;
