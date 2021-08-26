@@ -456,6 +456,20 @@ public:
      */
     CHIP_ERROR PairDevice(NodeId remoteDeviceId, RendezvousParameters & params);
 
+    /**
+     * @brief
+     *   Pair a CHIP device that's already on our fabric.
+     *
+     *   This does not change the state of the remote device, only adds
+     *   it to the local paired device list.
+     *
+     *   TODO - This should really not be needed as there is no fundamental
+     *          requirement to maintain such a list.
+     *
+     * @param[in] peerId                The remote device Id.
+     */
+    CHIP_ERROR PairCommissionedDevice(const PeerId & peerId);
+
     [[deprecated("Available until Rendezvous is implemented")]] CHIP_ERROR
     PairTestDeviceWithoutSecurity(NodeId remoteDeviceId, const Transport::PeerAddress & peerAddress, SerializedDevice & serialized);
 

@@ -97,6 +97,9 @@ CHIP_ERROR PairingCommand::RunInternal(NodeId remoteId)
     case PairingMode::Ethernet:
         err = Pair(remoteId, PeerAddress::UDP(mRemoteAddr.address, mRemotePort));
         break;
+    case PairingMode::Commissioned:
+        err = PairCommissionedDevice(mFabricId, mNodeId);
+        break;
     }
 
     return err;
@@ -142,6 +145,22 @@ CHIP_ERROR PairingCommand::PairWithoutSecurity(NodeId remoteId, PeerAddress addr
 {
     ChipSerializedDevice serializedTestDevice;
     return GetExecContext()->commissioner->PairTestDeviceWithoutSecurity(remoteId, address, serializedTestDevice);
+}
+
+CHIP_ERROR PairingCommand::PairCommissionedDevice(FabricId fabricId, NodeId nodeId)
+{
+    // We don't use the randomized id. Neither does unpair. Probably it should
+    // not be generated for commands that don't need it.
+    mRemoteId = nodeId;
+
+    ReturnErrorOnFailure(GetExecContext()->storage->SetRemoteNodeId(nodeId));
+
+    PeerId peerId    = PeerId().SetFabricId(mFabricId).SetNodeId(mNodeId);
+    CHIP_ERROR error = GetExecContext()->commissioner->PairCommissionedDevice(peerId);
+
+    ReturnErrorOnFailure(UpdateNetworkAddress());
+
+    return error;
 }
 
 CHIP_ERROR PairingCommand::Unpair(NodeId remoteId)

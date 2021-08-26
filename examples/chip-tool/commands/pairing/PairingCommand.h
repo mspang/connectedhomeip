@@ -38,6 +38,9 @@ enum class PairingMode
     SoftAP,
     Ethernet,
     OnNetwork,
+
+    // Commisioned device - already on the fabric.
+    Commissioned,
 };
 
 enum class PairingNetworkType
@@ -102,6 +105,9 @@ public:
             AddArgument("device-remote-ip", &mRemoteAddr);
             AddArgument("device-remote-port", 0, UINT16_MAX, &mRemotePort);
             break;
+        case PairingMode::Commissioned:
+            AddArgument("fabric-id", 0, UINT64_MAX, &mFabricId);
+            AddArgument("node-id", 0, UINT64_MAX, &mNodeId);
         }
     }
 
@@ -131,6 +137,7 @@ private:
     CHIP_ERROR PairWithManualCode(NodeId remoteId);
     CHIP_ERROR PairWithCode(NodeId remoteId, chip::SetupPayload payload);
     CHIP_ERROR PairWithoutSecurity(NodeId remoteId, PeerAddress address);
+    CHIP_ERROR PairCommissionedDevice(chip::FabricId fabricId, NodeId nodeId);
     CHIP_ERROR Unpair(NodeId remoteId);
 
     void InitCallbacks();
@@ -149,6 +156,7 @@ private:
     NodeId mRemoteId;
     uint16_t mRemotePort;
     uint64_t mFabricId;
+    uint64_t mNodeId;
     uint16_t mDiscriminator;
     uint32_t mSetupPINCode;
     chip::ByteSpan mOperationalDataset;

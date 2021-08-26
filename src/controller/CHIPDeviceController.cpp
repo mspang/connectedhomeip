@@ -400,6 +400,51 @@ exit:
     return err;
 }
 
+CHIP_ERROR DeviceCommissioner::PairCommissionedDevice(const PeerId & peerId)
+{
+
+    if (DoesDevicePairingExist(peerId))
+    {
+        ChipLogError(Controller, "Device already paired: %" PRIx64 "-%" PRIx64, peerId.GetFabricId(), peerId.GetNodeId());
+        return CHIP_NO_ERROR;
+    }
+
+    uint64_t controllerFabricId;
+    CHIP_ERROR error = GetFabricId(controllerFabricId);
+    if (error != CHIP_NO_ERROR)
+    {
+        ChipLogError(Controller, "Failed to get controller fabric id.");
+        return CHIP_ERROR_INCORRECT_STATE;
+    }
+
+    if (controllerFabricId != peerId.GetFabricId())
+    {
+        ChipLogError(Controller, "Cannot pair device with mismatched fabric id: %" PRIx64 ", expected %" PRIx64,
+                     peerId.GetFabricId(), controllerFabricId);
+        return CHIP_ERROR_INCORRECT_STATE;
+    }
+
+    uint16_t deviceIndex = GetInactiveDeviceIndex();
+    VerifyOrReturnError(deviceIndex < kNumMaxActiveDevices, CHIP_ERROR_NO_MEMORY);
+    Device * device = &mActiveDevices[deviceIndex];
+
+    Transport::PeerAddress peerAddress = Transport::PeerAddress::UDP(Inet::IPAddress::Any);
+
+    device->Init(GetControllerDeviceInitParams(), mListenPort, peerId.GetNodeId(), peerAddress, mFabricIndex);
+
+    device->OperationalCertProvisioned();
+
+    mPairedDevices.Insert(peerId.GetNodeId());
+    mPairedDevicesUpdated = true;
+
+    PersistDevice(device);
+    PersistDeviceList();
+
+    ReleaseDevice(device);
+
+    return CHIP_NO_ERROR;
+}
+
 bool DeviceController::DoesDevicePairingExist(const PeerId & deviceId)
 {
     if (InitializePairedDeviceList() == CHIP_NO_ERROR)
