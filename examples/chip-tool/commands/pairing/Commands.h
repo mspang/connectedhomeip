@@ -50,6 +50,12 @@ public:
     PairOnNetwork() : PairingCommand("onnetwork", PairingMode::OnNetwork, PairingNetworkType::None) {}
 };
 
+class PairCommissioned : public PairingCommand
+{
+public:
+    PairCommissioned() : PairingCommand("commissioned", PairingMode::Commissioned, PairingNetworkType::None) {}
+};
+
 class PairBleWiFi : public PairingCommand
 {
 public:
@@ -88,7 +94,8 @@ void registerCommandsPairing(Commands & commands)
         make_unique<PairQRCode>(),                  //
         make_unique<PairSoftAP>(),                  //
         make_unique<RequestCommissioningCommand>(), //
-        make_unique<Unpair>()                       //
+        make_unique<Unpair>(),                      //
+        make_unique<PairCommissioned>(),
     };
 
     commands.Register(clusterName, clusterCommands);

@@ -475,6 +475,39 @@ exit:
     return err;
 }
 
+CHIP_ERROR DeviceCommissioner::PairCommissionedDevice(const PeerId & peerId)
+{
+
+    Transport::AdminPairingInfo * admin = mAdmins.FindAdminWithId(mAdminId);
+    VerifyOrReturnError(admin != nullptr, CHIP_ERROR_INCORRECT_STATE);
+
+    if (DoesDevicePairingExist(peerId))
+    {
+        ChipLogError(Controller, "Device already paired: %" PRIx64 "-%" PRIx64, peerId.GetFabricId(), peerId.GetNodeId());
+        return CHIP_NO_ERROR;
+    }
+
+    uint16_t deviceIndex = GetInactiveDeviceIndex();
+    VerifyOrReturnError(deviceIndex < kNumMaxActiveDevices, CHIP_ERROR_NO_MEMORY);
+    Device * device = &mActiveDevices[deviceIndex];
+
+    Transport::PeerAddress peerAddress = Transport::PeerAddress::UDP(Inet::IPAddress::Any);
+
+    device->Init(GetControllerDeviceInitParams(), mListenPort, peerId.GetNodeId(), peerAddress, admin->GetAdminId());
+
+    device->OperationalCertProvisioned();
+
+    mPairedDevices.Insert(peerId.GetNodeId());
+    mPairedDevicesUpdated = true;
+
+    PersistDevice(device);
+    PersistDeviceList();
+
+    ReleaseDevice(device);
+
+    return CHIP_NO_ERROR;
+}
+
 bool DeviceController::DoesDevicePairingExist(const PeerId & deviceId)
 {
     if (InitializePairedDeviceList() == CHIP_NO_ERROR)
