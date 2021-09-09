@@ -316,7 +316,7 @@ protected:
  * establish secure channel
  */
 constexpr chip::NodeId kTestControllerNodeId = 112233;
-constexpr chip::NodeId kTestDeviceNodeId     = 12344321;
+constexpr chip::NodeId kTestDeviceNodeId     = 1080806854178366114;
 
 /*
  * The following class should only be used for test usecases.
