@@ -609,6 +609,9 @@ CHIP_ERROR AdvertiserMinMdns::Advertise(const CommissionAdvertisingParameters & 
         ChipLogProgress(Discovery, "CHIP minimal mDNS configured as 'Commissioner device'.");
     }
 
+    // Send unsolicited announcement when records change per RFC 6762.
+    AdvertiseRecords();
+
     return CHIP_NO_ERROR;
 }
 
