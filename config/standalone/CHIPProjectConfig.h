@@ -24,6 +24,8 @@
 #ifndef CHIPPROJECTCONFIG_H
 #define CHIPPROJECTCONFIG_H
 
+#pragma message "config/standalone/CHIPProjectConfig.h"
+
 #define CHIP_CONFIG_ENABLE_EPHEMERAL_UDP_PORT 1
 
 #define CHIP_CONFIG_EVENT_LOGGING_UTC_TIMESTAMPS 1

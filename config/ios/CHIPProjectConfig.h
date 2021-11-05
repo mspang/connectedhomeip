@@ -26,6 +26,8 @@
 #ifndef CHIPPROJECTCONFIG_H
 #define CHIPPROJECTCONFIG_H
 
+#pragma message "config/ios/CHIPProjectConfig.h"
+
 // Enable use of an ephemeral UDP source port for locally initiated CHIP exchanges.
 #define CHIP_CONFIG_ENABLE_EPHEMERAL_UDP_PORT 1
 

@@ -34,6 +34,8 @@ declare_args() {
   chip_project_config_include_dirs = []
 }
 
+assert(chip_project_config_include == "<CHIPProjectConfig.h>")
+
 if (chip_project_config_include_dirs == [] &&
     chip_project_config_include == "<CHIPProjectConfig.h>" &&
     chip_system_project_config_include == "<SystemProjectConfig.h>") {
