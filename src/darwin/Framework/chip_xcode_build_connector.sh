@@ -52,19 +52,7 @@ for define in "${defines[@]}"; do
 
     # skip over those that GN does for us
     case "$define" in
-        CHIP_DEVICE_LAYER*)
-            continue
-            ;;
-        CHIP_*_CONFIG_INCLUDE)
-            continue
-            ;;
-        CHIP_SYSTEM_CONFIG_*)
-            continue
-            ;;
-        CONFIG_NETWORK_LAYER*)
-            continue
-            ;;
-        CHIP_CRYPTO_*)
+        CHIP_HAVE_CONFIG_H)
             continue
             ;;
     esac
@@ -108,6 +96,7 @@ declare -a args=(
     'chip_crypto="mbedtls"'
     'chip_build_tools=false'
     'chip_build_tests=false'
+    'chip_project_config_include="<CHIPProjectConfig.h>"'
     'chip_ble_project_config_include=""'
     'chip_device_project_config_include=""'
     'chip_inet_project_config_include=""'
