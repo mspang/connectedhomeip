@@ -458,17 +458,6 @@ public:
 
 void SetupPretendDevices()
 {
-    AddDevice("Watch");
-    AddEndpoint("Default");
-    AddCluster("Battery");
-    AddAttribute("Level", "89");
-    AddAttribute("Voltage", "490");
-    AddAttribute("Amperage", "501");
-    AddCluster("Heart Monitor");
-    AddAttribute("BPM", "72");
-    AddCluster("Step Counter");
-    AddAttribute("Steps", "9876");
-
     AddDevice("Light Bulb");
     AddEndpoint("1");
     AddCluster("OnOff");
