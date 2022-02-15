@@ -236,7 +236,9 @@ public:
             if (name == "Temperature")
             {
                 // update the temp attribute here for hardcoded endpoint 1
-                chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(1, static_cast<int16_t>(n * 100));
+                chip::DeviceLayer::SystemLayer().ScheduleLambda([n] {
+                    chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(1, static_cast<int16_t>(n * 100));
+                });
             }
             value = buffer;
         }
@@ -249,8 +251,11 @@ public:
             if (name == "OnOff" && cluster == "OnOff")
             {
                 uint8_t attributeValue = (value == "On") ? 1 : 0;
-                emberAfWriteServerAttribute(endpointIndex + 1, ZCL_ON_OFF_CLUSTER_ID, ZCL_ON_OFF_ATTRIBUTE_ID,
-                                            (uint8_t *) &attributeValue, ZCL_BOOLEAN_ATTRIBUTE_TYPE);
+
+                chip::DeviceLayer::SystemLayer().ScheduleLambda([endpoint = endpointIndex, attributeValue] {
+                    emberAfWriteServerAttribute(endpoint + 1, ZCL_ON_OFF_CLUSTER_ID, ZCL_ON_OFF_ATTRIBUTE_ID,
+                                                (uint8_t *) &attributeValue, ZCL_BOOLEAN_ATTRIBUTE_TYPE);
+                });
             }
         }
         else
@@ -266,7 +271,8 @@ public:
                 using namespace chip::app::Clusters;
                 // update the doorlock attribute here
                 auto attributeValue = value == "Closed" ? DoorLock::DlLockState::kLocked : DoorLock::DlLockState::kUnlocked;
-                DoorLock::Attributes::LockState::Set(DOOR_LOCK_SERVER_ENDPOINT, attributeValue);
+                chip::DeviceLayer::SystemLayer().ScheduleLambda(
+                    [attributeValue] { DoorLock::Attributes::LockState::Set(DOOR_LOCK_SERVER_ENDPOINT, attributeValue); });
             }
         }
     }
@@ -479,16 +485,12 @@ void SetupPretendDevices()
     AddEndpoint("External");
     AddCluster("Thermometer");
     AddAttribute("Temperature", "21");
-    // write the temp attribute
-    chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(1, static_cast<int16_t>(21 * 100));
 
     AddDevice("Door Lock");
     AddEndpoint("Default");
     AddCluster("Lock");
     AddAttribute("State", "Open");
-    // write the door lock state
-    chip::app::Clusters::DoorLock::Attributes::LockState::Set(DOOR_LOCK_SERVER_ENDPOINT,
-                                                              chip::app::Clusters::DoorLock::DlLockState::kUnlocked);
+
     AddDevice("Garage 1");
     AddEndpoint("Door 1");
     AddCluster("Door");
