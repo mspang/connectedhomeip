@@ -82,6 +82,8 @@ void emberAfOccupancySensingClusterServerInitCallback(EndpointId endpoint)
     }
     Attributes::OccupancySensorTypeBitmap::Set(endpoint, deviceTypeBitmap);
 
+    halOccupancyStateChangedCallback(endpoint, HAL_OCCUPANCY_STATE_OCCUPIED);
+
     emberAfPluginOccupancyClusterServerPostInitCallback(endpoint);
 }
 

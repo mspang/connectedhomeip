@@ -237,31 +237,40 @@ public:
             {
                 // update the temp attribute here for hardcoded endpoint 1
                 chip::DeviceLayer::SystemLayer().ScheduleLambda([n] {
-                    chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(1, static_cast<int16_t>(n * 100));
+                    chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(6, static_cast<int16_t>(n * 100));
                 });
             }
             value = buffer;
         }
         else if (IsBooleanAttribute())
         {
-            auto & name    = std::get<0>(attribute);
-            auto & cluster = std::get<0>(std::get<1>(std::get<1>(devices[deviceIndex])[endpointIndex])[i]);
-            value          = (value == "On") ? "Off" : "On";
+            auto & name            = std::get<0>(attribute);
+            auto & cluster         = std::get<0>(std::get<1>(std::get<1>(devices[deviceIndex])[endpointIndex])[clusterIndex]);
+            value                  = (value == "On") ? "Off" : "On";
+            uint8_t attributeValue = (value == "On") ? 1 : 0;
 
             if (name == "OnOff" && cluster == "OnOff")
             {
-                uint8_t attributeValue = (value == "On") ? 1 : 0;
-
                 chip::DeviceLayer::SystemLayer().ScheduleLambda([endpoint = endpointIndex, attributeValue] {
                     emberAfWriteServerAttribute(endpoint + 1, ZCL_ON_OFF_CLUSTER_ID, ZCL_ON_OFF_ATTRIBUTE_ID,
                                                 (uint8_t *) &attributeValue, ZCL_BOOLEAN_ATTRIBUTE_TYPE);
                 });
             }
+            else if (name == "Occupancy" && cluster == "OccupancySensing")
+            {
+                chip::DeviceLayer::SystemLayer().ScheduleLambda(
+                    [attributeValue] { chip::app::Clusters::OccupancySensing::Attributes::Occupancy::Set(5, attributeValue); });
+            }
+            else if (name == "Contact" && cluster == "BooleanState")
+            {
+                chip::DeviceLayer::SystemLayer().ScheduleLambda(
+                    [attributeValue] { chip::app::Clusters::BooleanState::Attributes::StateValue::Set(4, attributeValue); });
+            }
         }
         else
         {
             auto & name    = std::get<0>(attribute);
-            auto & cluster = std::get<0>(std::get<1>(std::get<1>(devices[deviceIndex])[endpointIndex])[i]);
+            auto & cluster = std::get<0>(std::get<1>(std::get<1>(devices[deviceIndex])[endpointIndex])[attributeIndex]);
 
             ESP_LOGI(TAG, "editing attribute as string: '%s' (%s)", value.c_str(), i == 0 ? "+" : "-");
             value = (value == "Closed") ? "Open" : "Closed";
@@ -482,22 +491,10 @@ void SetupPretendDevices()
 
     AddDevice("Garage 1");
     AddEndpoint("Door 1");
-    AddCluster("Door");
-    AddAttribute("State", "Closed");
-    AddEndpoint("Door 2");
-    AddCluster("Door");
-    AddAttribute("State", "Closed");
-    AddEndpoint("Door 3");
-    AddCluster("Door");
-    AddAttribute("State", "Open");
-
-    AddDevice("Garage 2");
-    AddEndpoint("Door 1");
-    AddCluster("Door");
-    AddAttribute("State", "Open");
-    AddEndpoint("Door 2");
-    AddCluster("Door");
-    AddAttribute("State", "Closed");
+    AddCluster("BooleanState");
+    AddAttribute("Contact", "On");
+    AddCluster("OccupancySensing");
+    AddAttribute("Occupancy", "On");
 }
 
 WiFiWidget pairingWindowLED;

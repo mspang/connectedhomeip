@@ -120,6 +120,16 @@ server cluster Basic = 40 {
   command MfgSpecificPing(): DefaultSuccess = 0;
 }
 
+server cluster BooleanState = 69 {
+  info event StateChange = 0 {
+    boolean stateValue = 0;
+  }
+
+  attribute(readonly) boolean stateValue = 0;
+  attribute(readonly) attrib_id attributeList[] = 65531;
+  attribute(readonly) int16u clusterRevision = 65533;
+}
+
 server cluster ColorControl = 768 {
   enum ColorLoopAction : ENUM8 {
     kDeactivate = 0;
@@ -1326,6 +1336,14 @@ server cluster OtaSoftwareUpdateRequestor = 42 {
   command AnnounceOtaProvider(AnnounceOtaProviderRequest): DefaultSuccess = 0;
 }
 
+server cluster OccupancySensing = 1030 {
+  attribute(readonly) bitmap8 occupancy = 0;
+  attribute(readonly) enum8 occupancySensorType = 1;
+  attribute(readonly) bitmap8 occupancySensorTypeBitmap = 2;
+  attribute(readonly) attrib_id attributeList[] = 65531;
+  attribute(readonly) int16u clusterRevision = 65533;
+}
+
 server cluster OnOff = 6 {
   enum OnOffDelayedAllOffEffectVariant : enum8 {
     kFadeToOffIn0p8Seconds = 0;
@@ -1497,6 +1515,14 @@ server cluster SoftwareDiagnostics = 52 {
   attribute(readonly) int16u clusterRevision = 65533;
 
   command ResetWatermarks(): DefaultSuccess = 0;
+}
+
+server cluster TemperatureMeasurement = 1026 {
+  attribute(readonly) int16s measuredValue = 0;
+  attribute(readonly) int16s minMeasuredValue = 1;
+  attribute(readonly) int16s maxMeasuredValue = 2;
+  attribute(readonly) attrib_id attributeList[] = 65531;
+  attribute(readonly) int16u clusterRevision = 65533;
 }
 
 server cluster ThreadNetworkDiagnostics = 53 {
@@ -1751,5 +1777,20 @@ endpoint 2 {
 endpoint 3 {
   server  cluster Descriptor;
   server  cluster DoorLock;
+}
+
+endpoint 4 {
+  server  cluster BooleanState;
+  server  cluster Descriptor;
+}
+
+endpoint 5 {
+  server  cluster Descriptor;
+  server  cluster OccupancySensing;
+}
+
+endpoint 6 {
+  server  cluster Descriptor;
+  server  cluster TemperatureMeasurement;
 }
 
