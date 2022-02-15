@@ -1525,6 +1525,22 @@ server cluster TemperatureMeasurement = 1026 {
   attribute(readonly) int16u clusterRevision = 65533;
 }
 
+server cluster Thermostat = 513 {
+  enum SetpointAdjustMode : ENUM8 {
+    kHeatSetpoint = 0;
+    kCoolSetpoint = 1;
+    kHeatAndCoolSetpoints = 2;
+  }
+
+  attribute(readonly) int16s localTemperature = 0;
+  attribute(writable) int16s occupiedCoolingSetpoint = 17;
+  attribute(writable) int16s occupiedHeatingSetpoint = 18;
+  attribute(writable) enum8 controlSequenceOfOperation = 27;
+  attribute(writable) enum8 systemMode = 28;
+  attribute(readonly) attrib_id attributeList[] = 65531;
+  attribute(readonly) int16u clusterRevision = 65533;
+}
+
 server cluster ThreadNetworkDiagnostics = 53 {
   enum NetworkFault : ENUM8 {
     kUnspecified = 0;
@@ -1792,5 +1808,10 @@ endpoint 5 {
 endpoint 6 {
   server  cluster Descriptor;
   server  cluster TemperatureMeasurement;
+}
+
+endpoint 7 {
+  server  cluster Descriptor;
+  server  cluster Thermostat;
 }
 

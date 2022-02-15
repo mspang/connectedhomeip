@@ -238,6 +238,7 @@ public:
                 // update the temp attribute here for hardcoded endpoint 1
                 chip::DeviceLayer::SystemLayer().ScheduleLambda([n] {
                     chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(6, static_cast<int16_t>(n * 100));
+                    chip::app::Clusters::Thermostat::Attributes::LocalTemperature::Set(7, static_cast<int16_t>(n * 100));
                 });
             }
             value = buffer;
