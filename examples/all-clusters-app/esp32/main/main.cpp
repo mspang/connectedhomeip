@@ -272,7 +272,7 @@ public:
                 // update the doorlock attribute here
                 auto attributeValue = value == "Closed" ? DoorLock::DlLockState::kLocked : DoorLock::DlLockState::kUnlocked;
                 chip::DeviceLayer::SystemLayer().ScheduleLambda(
-                    [attributeValue] { DoorLock::Attributes::LockState::Set(DOOR_LOCK_SERVER_ENDPOINT, attributeValue); });
+                    [attributeValue] { DoorLock::Attributes::LockState::Set(3, attributeValue); });
             }
         }
     }
