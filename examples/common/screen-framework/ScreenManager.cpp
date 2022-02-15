@@ -52,8 +52,8 @@ SemaphoreHandle_t mutex;
 
 struct Lock
 {
-    Lock() { xSemaphoreTakeRecursive(mutex, portMAX_DELAY); }
-    ~Lock() { xSemaphoreGive(mutex); }
+    Lock() { if (xSemaphoreTakeRecursive(mutex, portMAX_DELAY) != pdTRUE) abort(); }
+    ~Lock() { xSemaphoreGiveRecursive(mutex); }
 };
 
 struct VLED
