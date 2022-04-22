@@ -32,8 +32,13 @@ get_submodule_config() {
 }
 
 SUBMODULE_URL=$(get_submodule_config url)
-SUBMODULE_BRANCH=$(get_submodule_config branch)
 SUBMODULE_PATH=$(get_submodule_config path)
+SUBMODULE_BRANCH=$(get_submodule_config branch || true)
+
+if [[ -z "${SUBMODULE_BRANCH}" ]]; then
+  echo >&2 "Skipping $name (no branch set in .gitmodules)"
+  exit 0
+fi
 
 git fetch --quiet "$SUBMODULE_URL" "$SUBMODULE_BRANCH"
 

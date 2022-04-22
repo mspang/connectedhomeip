@@ -71,7 +71,7 @@
 [submodule "efr32_sdk"]
 	path = third_party/efr32_sdk/repo
 	url = https://github.com/SiliconLabs/sdk_support.git
-	branch  = master
+	branch  = main
 	platforms = efr32
 [submodule "simw-top-mini"]
 	path = third_party/simw-top-mini/repo
@@ -206,6 +206,7 @@
 [submodule "third_party/jsoncpp/repo"]
 	path = third_party/jsoncpp/repo
 	url = https://github.com/open-source-parsers/jsoncpp.git
+	branch = master
 [submodule "cyw30739_sdk/30739A0"]
 	path = third_party/cyw30739_sdk/repos/30739A0
 	url = https://github.com/Infineon/30739A0.git
@@ -233,6 +234,7 @@
 [submodule "perfetto"]
 	path = third_party/perfetto/repo
 	url = https://github.com/google/perfetto
+	branch = master
 [submodule "p6/serial-flash"]
 	path = third_party/p6/p6_sdk/libs/serial-flash
 	url = https://github.com/Infineon/serial-flash
