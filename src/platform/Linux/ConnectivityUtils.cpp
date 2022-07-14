@@ -27,10 +27,12 @@
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
+#if 0
 #include <linux/ethtool.h>
 #include <linux/if_link.h>
 #include <linux/sockios.h>
 #include <linux/wireless.h>
+#endif
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -232,6 +234,7 @@ uint8_t ConnectivityUtils::MapFrequencyToChannel(const uint16_t frequency)
     return frequency / 5 - 1000;
 }
 
+#if 0
 double ConnectivityUtils::ConvertFrequenceToFloat(const iw_freq * in)
 {
     double result = (double) in->m;
@@ -241,10 +244,12 @@ double ConnectivityUtils::ConvertFrequenceToFloat(const iw_freq * in)
 
     return result;
 }
+#endif
 
 InterfaceType ConnectivityUtils::GetInterfaceConnectionType(const char * ifname)
 {
     InterfaceType ret = InterfaceType::EMBER_ZCL_INTERFACE_TYPE_UNSPECIFIED;
+#if 0
     int sock          = -1;
 
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)
@@ -275,6 +280,7 @@ InterfaceType ConnectivityUtils::GetInterfaceConnectionType(const char * ifname)
 
     close(sock);
 
+#endif
     return ret;
 }
 
@@ -434,6 +440,7 @@ CHIP_ERROR ConnectivityUtils::GetWiFiInterfaceName(char * ifname, size_t bufSize
     return err;
 }
 
+#if 0
 CHIP_ERROR ConnectivityUtils::GetWiFiParameter(int skfd,            /* Socket to the kernel */
                                                const char * ifname, /* Device name */
                                                int request,         /* WE ID */
@@ -462,10 +469,12 @@ CHIP_ERROR ConnectivityUtils::GetWiFiStats(int skfd, const char * ifname, struct
 
     return GetWiFiParameter(skfd, ifname, SIOCGIWSTATS, &wrq);
 }
+#endif
 
 CHIP_ERROR ConnectivityUtils::GetWiFiChannelNumber(const char * ifname, uint16_t & channelNumber)
 {
     CHIP_ERROR err = CHIP_ERROR_READ_FAILED;
+#if 0
 
     struct iwreq wrq;
     int skfd;
@@ -487,12 +496,14 @@ CHIP_ERROR ConnectivityUtils::GetWiFiChannelNumber(const char * ifname, uint16_t
 
     close(skfd);
 
+#endif
     return err;
 }
 
 CHIP_ERROR ConnectivityUtils::GetWiFiRssi(const char * ifname, int8_t & rssi)
 {
     CHIP_ERROR err = CHIP_ERROR_READ_FAILED;
+#if 0
     struct iw_statistics stats;
     int skfd;
 
@@ -547,13 +558,14 @@ CHIP_ERROR ConnectivityUtils::GetWiFiRssi(const char * ifname, int8_t & rssi)
     }
 
     close(skfd);
-
+#endif
     return err;
 }
 
 CHIP_ERROR ConnectivityUtils::GetWiFiBeaconLostCount(const char * ifname, uint32_t & beaconLostCount)
 {
     CHIP_ERROR err = CHIP_ERROR_READ_FAILED;
+#if 0
     struct iw_statistics stats;
     int skfd;
 
@@ -571,12 +583,14 @@ CHIP_ERROR ConnectivityUtils::GetWiFiBeaconLostCount(const char * ifname, uint32
 
     close(skfd);
 
+#endif
     return err;
 }
 
 CHIP_ERROR ConnectivityUtils::GetWiFiCurrentMaxRate(const char * ifname, uint64_t & currentMaxRate)
 {
     CHIP_ERROR err = CHIP_ERROR_READ_FAILED;
+#if 0
     struct iwreq wrq;
     int skfd;
 
@@ -594,6 +608,7 @@ CHIP_ERROR ConnectivityUtils::GetWiFiCurrentMaxRate(const char * ifname, uint64_
 
     close(skfd);
 
+#endif
     return err;
 }
 
@@ -632,6 +647,7 @@ CHIP_ERROR ConnectivityUtils::GetEthInterfaceName(char * ifname, size_t bufSize)
 CHIP_ERROR ConnectivityUtils::GetEthPHYRate(const char * ifname, app::Clusters::EthernetNetworkDiagnostics::PHYRateType & pHYRate)
 {
     CHIP_ERROR err = CHIP_NO_ERROR;
+#if 0
 
     int skfd;
     uint32_t speed          = 0;
@@ -696,12 +712,14 @@ CHIP_ERROR ConnectivityUtils::GetEthPHYRate(const char * ifname, app::Clusters::
 
     close(skfd);
 
+#endif
     return err;
 }
 
 CHIP_ERROR ConnectivityUtils::GetEthFullDuplex(const char * ifname, bool & fullDuplex)
 {
     CHIP_ERROR err = CHIP_ERROR_READ_FAILED;
+#if 0
 
     int skfd;
     struct ethtool_cmd ecmd = {};
@@ -730,6 +748,7 @@ CHIP_ERROR ConnectivityUtils::GetEthFullDuplex(const char * ifname, bool & fullD
 
     close(skfd);
 
+#endif
     return err;
 }
 

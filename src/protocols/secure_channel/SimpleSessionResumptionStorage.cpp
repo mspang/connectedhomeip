@@ -24,6 +24,8 @@
 
 #include <protocols/secure_channel/SimpleSessionResumptionStorage.h>
 
+#include <algorithm>
+
 #include <lib/support/Base64.h>
 #include <lib/support/SafeInt.h>
 

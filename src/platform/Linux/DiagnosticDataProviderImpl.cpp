@@ -34,10 +34,6 @@
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <ifaddrs.h>
-#include <linux/ethtool.h>
-#include <linux/if_link.h>
-#include <linux/netlink.h>
-#include <linux/rtnetlink.h>
 #include <malloc.h>
 #include <net/if.h>
 #include <netinet/in.h>
@@ -46,6 +42,13 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#if CHIP_DEVICE_CONFIG_ENABLE_WIFI
+#include <linux/ethtool.h>
+#include <linux/if_link.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#endif
 
 using namespace ::chip;
 using namespace ::chip::app;
@@ -77,6 +80,7 @@ enum class WiFiStatsCountType
 CHIP_ERROR GetEthernetStatsCount(EthernetStatsCountType type, uint64_t & count)
 {
     CHIP_ERROR err          = CHIP_ERROR_READ_FAILED;
+# if 0
     struct ifaddrs * ifaddr = nullptr;
 
     if (getifaddrs(&ifaddr) == -1)
@@ -134,6 +138,7 @@ CHIP_ERROR GetEthernetStatsCount(EthernetStatsCountType type, uint64_t & count)
         freeifaddrs(ifaddr);
     }
 
+#endif
     return err;
 }
 
@@ -601,6 +606,7 @@ CHIP_ERROR DiagnosticDataProviderImpl::GetEthOverrunCount(uint64_t & overrunCoun
 CHIP_ERROR DiagnosticDataProviderImpl::ResetEthNetworkDiagnosticsCounts()
 {
     CHIP_ERROR err          = CHIP_ERROR_READ_FAILED;
+#if 0
     struct ifaddrs * ifaddr = nullptr;
 
     if (getifaddrs(&ifaddr) == -1)
@@ -638,6 +644,7 @@ CHIP_ERROR DiagnosticDataProviderImpl::ResetEthNetworkDiagnosticsCounts()
 
         freeifaddrs(ifaddr);
     }
+#endif
 
     return err;
 }

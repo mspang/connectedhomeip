@@ -214,7 +214,7 @@ CHIP_ERROR GenericPlatformManagerImpl_POSIX<ImplClass>::_StartEventLoopTask()
     err = pthread_attr_getschedparam(&mChipTaskAttr, &mChipTaskSchedParam);
     VerifyOrReturnError(err == 0, CHIP_ERROR_POSIX(err));
 
-#if CHIP_DEVICE_CONFIG_RUN_AS_ROOT
+#if CHIP_DEVICE_CONFIG_RUN_AS_ROOT && 0
     // set SCHED_RR need root/admin on Android
     err = pthread_attr_setschedpolicy(&mChipTaskAttr, SCHED_RR);
     VerifyOrReturnError(err == 0, CHIP_ERROR_POSIX(err));

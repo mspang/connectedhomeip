@@ -38,8 +38,10 @@
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <errno.h>
+#if 0
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#endif
 #include <net/if.h>
 #include <netinet/in.h>
 #include <unistd.h>

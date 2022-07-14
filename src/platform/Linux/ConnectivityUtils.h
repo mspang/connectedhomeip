@@ -26,8 +26,10 @@
 #include <platform/DiagnosticDataProvider.h>
 #include <platform/internal/CHIPDeviceLayerInternal.h>
 
+#if 0
 #include <linux/types.h> /* for "caddr_t" et al      */
 #include <linux/wireless.h>
+#endif
 
 namespace chip {
 namespace DeviceLayer {
@@ -59,9 +61,11 @@ public:
 private:
     static uint16_t Map2400MHz(const uint8_t inChannel);
     static uint16_t Map5000MHz(const uint8_t inChannel);
+#if 0
     static double ConvertFrequenceToFloat(const iw_freq * in);
     static CHIP_ERROR GetWiFiParameter(int skfd, const char * ifname, int request, struct iwreq * pwrq);
     static CHIP_ERROR GetWiFiStats(int skfd, const char * ifname, struct iw_statistics * stats);
+#endif
 };
 
 } // namespace Internal

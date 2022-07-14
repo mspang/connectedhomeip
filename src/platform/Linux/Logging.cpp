@@ -8,9 +8,13 @@
 #include <cinttypes>
 #include <cstdio>
 #include <cstring>
+#include <unistd.h>
+
+#if 0
 #include <sys/syscall.h>
 #include <sys/time.h>
-#include <unistd.h>
+#endif
+#include <sys/time.h>
 
 #if CHIP_USE_PW_LOGGING
 #include <pw_log/log.h>
@@ -49,7 +53,7 @@ void ENFORCE_FORMAT(3, 0) LogV(const char * module, uint8_t category, const char
     flockfile(stdout);
 
     printf("[%" PRIu64 ".%06" PRIu64 "][%lld:%lld] CHIP:%s: ", static_cast<uint64_t>(tv.tv_sec), static_cast<uint64_t>(tv.tv_usec),
-           static_cast<long long>(syscall(SYS_getpid)), static_cast<long long>(syscall(SYS_gettid)), module);
+           (long long)getpid(), (long long)0, module);
     vprintf(msg, v);
     printf("\n");
     fflush(stdout);
