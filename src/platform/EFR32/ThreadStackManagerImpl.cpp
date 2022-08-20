@@ -100,11 +100,6 @@ extern "C" void otPlatFree(void * aPtr)
     CHIPPlatformMemoryFree(aPtr);
 }
 
-extern "C" __WEAK void sl_openthread_init(void)
-{
-    // Place holder for enabling Silabs specific features available only through Simplicity Studio
-}
-
 /**
  * @brief Openthread UART implementation for the CLI is conflicting
  *        with the UART implemented for Pigweed RPC as they use the same UART port

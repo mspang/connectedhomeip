@@ -72,11 +72,13 @@ void init_efrPlatform(void)
 #endif
 
 #if EFR32_LOG_ENABLED
-    efr32InitLog();
+    efr32LogInit();
 #endif
 
 #if CHIP_ENABLE_OPENTHREAD
-    sl_ot_sys_init();
+    efr32RadioInit();
+    efr32AlarmInit();
+    efr32MiscInit();
 #endif // CHIP_ENABLE_OPENTHREAD
 }
 

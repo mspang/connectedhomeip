@@ -104,7 +104,7 @@ static void PrintLog(const char * msg)
 /**
  * Initialize Segger RTT for logging
  */
-extern "C" void efr32InitLog(void)
+extern "C" void efr32LogInit(void)
 {
 #if EFR32_LOG_ENABLED
 #if LOG_RTT_BUFFER_INDEX != 0
@@ -344,7 +344,7 @@ extern "C" void debugHardfault(uint32_t * sp)
 
     if (sLogInitialized == false)
     {
-        efr32InitLog();
+        efr32LogInit();
     }
 
     snprintf(formattedMsg, sizeof formattedMsg, LOG_ERROR "HardFault:\n");
