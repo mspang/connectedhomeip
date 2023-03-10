@@ -284,7 +284,7 @@
  * flow to complete successfully. This may vary depending on the speed or sleepiness of the Commissionee.
  */
 #ifndef CHIP_DEVICE_CONFIG_FAILSAFE_EXPIRY_LENGTH_SEC
-#define CHIP_DEVICE_CONFIG_FAILSAFE_EXPIRY_LENGTH_SEC 60
+#define CHIP_DEVICE_CONFIG_FAILSAFE_EXPIRY_LENGTH_SEC 180
 #endif // CHIP_DEVICE_CONFIG_FAILSAFE_EXPIRY_LENGTH_SEC
 
 /**
