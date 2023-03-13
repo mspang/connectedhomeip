@@ -97,6 +97,15 @@ CHIP_ERROR FailSafeContext::ArmFailSafe(FabricIndex accessingFabricIndex, System
         cancelTimersIfError = true;
     }
 
+    static constexpr System::Clock::Seconds16 minExpiryLength =
+        System::Clock::Seconds16(CHIP_DEVICE_CONFIG_FAILSAFE_EXPIRY_LENGTH_SEC);
+    if (expiryLengthSeconds < minExpiryLength)
+    {
+        ChipLogError(FailSafe, "Requested fail-safe is too short, extending to %us",
+                     static_cast<unsigned>(minExpiryLength.count()));
+        expiryLengthSeconds = minExpiryLength;
+    }
+
     SuccessOrExit(
         err = DeviceLayer::SystemLayer().StartTimer(System::Clock::Seconds16(expiryLengthSeconds), HandleArmFailSafeTimer, this));
 
