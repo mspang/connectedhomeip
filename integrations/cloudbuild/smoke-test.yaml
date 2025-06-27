@@ -55,6 +55,7 @@ steps:
               --target nrf-nrf52840dk-light-rpc
               --target nrf-nrf52840dk-lock
               --target nrf-nrf52840dongle-light
+              --target nrf-nrf52840dongle-light-rpc
               build
               --create-archives /workspace/artifacts/
       waitFor:
